@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" width="280">
+</p>
+
 # Installing 2Clipboard
 
 Multi-distro installation guide. 2Clipboard is pure Bash; you only need a

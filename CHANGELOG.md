@@ -1,68 +1,82 @@
+<p align="center">
+  <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" width="280">
+</p>
+
 # Changelog
 
-Formato: [Keep a Changelog](https://keepachangelog.com/).
-Versionado: [SemVer](https://semver.org/lang/es/).
+Format: [Keep a Changelog](https://keepachangelog.com/).
+Versioning: [SemVer](https://semver.org/).
 
-Mantenido por **ENDURE · Built to last** — https://endure.digital/
+Maintained by **ENDURE · Built to last** — https://endure.digital/
 
 ## [2.2.0] — 2026-10-09
 
-### Añadido
-- Validación estricta de `--word-len` / `--hash-chars` (enteros 1-64).
-- `TWOCLIP_DEBUG=1` para traza detallada a stderr.
-- Subcomando `version` (además de `--version`).
-- Flag `--license` para imprimir la licencia MIT.
-- `Makefile`: targets `release` (tarball + sha256), `check` (alias `lint`),
-  `DESTDIR` para empaquetado.
-- Mensajes de error/warning consistentes (`2Clipboard: error: ...`).
+### Added
+- Strict validation of `--word-len` / `--hash-chars` (integers 1-64).
+- `TWOCLIP_DEBUG=1` for verbose tracing to stderr.
+- `version` subcommand (in addition to `--version`).
+- `--license` flag to print the MIT license.
+- `Makefile`: `release` (tarball + sha256), `check` (alias of `lint`),
+  `DESTDIR` for packaging.
+- Consistent error/warning messages (`2Clipboard: error: ...`).
 
-### Corregido
-- `render_template`: eliminados escapes falsos de `&` y `/` que inyectaban
-  caracteres literales en los valores.
-- `--clip-cmd`: ya no usa `eval`; pasa por `bash -c` con payload por stdin.
-- `--dry-run --stdout` ya no imprime dos veces.
-- `slot load --dry-run` no toca el portapapeles.
+### Fixed
+- `render_template`: removed spurious escapes of `&` and `/` that injected
+  literal characters into substituted values.
+- `--clip-cmd`: no longer uses `eval`; goes through `bash -c` with the
+  payload on stdin.
+- `--dry-run --stdout` no longer prints twice.
+- `slot load --dry-run` does not touch the clipboard.
 
 ## [2.1.0] — 2026-10-09
 
-### Añadido
-- Acción `header` para emitir solo el encabezado.
-- Acción `id` para obtener solo el identificador (nombre-hash).
+### Added
+- `header` action to emit only the header.
+- `id` action to get just the identifier (name-hash).
 - `--dry-run`, `--clip-cmd`, `--quiet`.
-- `slot save` lee de stdin si hay datos.
-- `history grep PAT` y `history clear`.
+- `slot save` reads from stdin if data is available.
+- `history grep PAT` and `history clear`.
 - `TWOCLIP_PROFILE`, `TWOCLIP_TAGS`, `TWOCLIP_TITLE`.
-- Detección real del backend (Wayland solo si el socket existe).
+- Real backend detection (Wayland only if the socket exists).
 
-### Corregido
-- `--body @archivo` carga el contenido.
-- `GIT_BRANCH` / `GIT_COMMIT` inicializadas.
-- Duplicado de `paste_from_clipboard` eliminado.
-- Mensajes de estado a stderr; `--stdout` pipeable a jq/yq/curl.
-- `xclip` / `xsel` no heredan stdout (fin del pipe colgado).
-- `--help` y `--version` no leen stdin.
-- `history grep PAT` acepta posicionales múltiples.
+### Fixed
+- `--body @file` loads the content.
+- `GIT_BRANCH` / `GIT_COMMIT` initialized.
+- Duplicated `paste_from_clipboard` removed.
+- Status messages to stderr; `--stdout` pipeable to jq/yq/curl.
+- `xclip` / `xsel` no longer inherit stdout (no more hanging pipe).
+- `--help` and `--version` do not read stdin.
+- `history grep PAT` accepts multiple positionals.
 
-### Cambiado
-- `-H` (mayúscula) para `--hash-chars`; `-h` queda para `--help`.
-- `action_file` ya no autocompleta TITLE con el basename.
+### Changed
+- `-H` (uppercase) for `--hash-chars`; `-h` is now `--help`.
+- `action_file` no longer auto-fills TITLE with the basename.
 
 ## [2.0.0] — 2026-10-08
 
-### Añadido
-- Subcomandos: gen, text, file, run, check, git, env, slot, paste, history.
-- Detección automática de stdin.
-- Plantillas {{VAR}} inline o desde ~/.config/2Clipboard/templates/.
-- Formatos: markdown, plain, json, yaml.
-- Historial (history.log).
-- Slots con nombre (slots/).
-- --append / --prepend.
-- Autoinstalación en PATH.
+### Added
+- Subcommands: gen, text, file, run, check, git, env, slot, paste, history.
+- Automatic stdin detection.
+- `{{VAR}}` templates, inline or from `~/.config/2Clipboard/templates/`.
+- Output formats: markdown, plain, json, yaml.
+- History (`history.log`).
+- Named slots (`slots/`).
+- `--append` / `--prepend`.
+- Self-install into PATH.
 
 ## [1.0.0] — 2026-10-07
 
-### Añadido
-- Generación de código [YYYY-MM-DD]-nombre-hash.
-- Nombres pronunciables + hash criptográfico.
-- Copia al portapapeles (Wayland / X11).
-- Notificaciones de escritorio.
+### Added
+- `[YYYY-MM-DD]-name-hash` code generation.
+- Pronounceable names + cryptographic hash.
+- Clipboard copy (Wayland / X11).
+- Desktop notifications.
+
+---
+
+<p align="center">
+  <a href="https://endure.digital/">Web</a> ·
+  <a href="https://github.com/iendure">GitHub</a> ·
+  <a href="https://c.endure.digital/">Contact</a> ·
+  <a href="https://w.endure.digital/">WhatsApp</a>
+</p>

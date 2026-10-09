@@ -1,87 +1,94 @@
+<p align="center">
+  <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" width="360">
+</p>
+
 # 2Clipboard
 
-> Notifica y copia: un solo binario para llevar al portapapeles todo lo que
-> produces, con metadatos trazables listos para pegar.
+> Notify and copy: a single binary that sends everything you produce to the
+> clipboard, with traceable metadata ready to paste.
 
 [![Version](https://img.shields.io/badge/version-2.2.0-blue.svg)](#)
 [![Bash](https://img.shields.io/badge/bash-4%2B-4EAA25.svg)](#)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](#licencia)
-[![Platform](https://img.shields.io/badge/platform-X11%20%7C%20Wayland-lightgrey.svg)](#)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](#license)
+[![Platform](https://img.shields.io/badge/platform-X11%20%7C%20Wayland-lightgrey.svg)](#clipboard-backends)
+[![CI](https://github.com/iendure/2Clipboard/actions/workflows/ci.yml/badge.svg)](https://github.com/iendure/2Clipboard/actions/workflows/ci.yml)
 
-Utilidad CLI en Bash para **generar, formatear y copiar al portapapeles**
-identificadores, adjuntos con cabecera de metadatos, salidas de comandos,
-validaciones booleanas y cualquier texto. Soporta perfiles, plantillas,
-formatos estructurados (Markdown, YAML, JSON, plain), slots con nombre e
-historial.
+A Bash CLI that **generates, formats and copies to the clipboard**: project
+codes, file attachments with metadata headers, command output, boolean
+validations, or any text. Supports profiles, templates, structured output
+(Markdown, YAML, JSON, plain), named slots and history.
 
-Diseñada para desarrolladores, flujos de prompting con LLM, bitácoras
-técnicas, zettelkasten y gestores de atajos (`sxhkd`, `xbindkeys`,
-`xfce4-keyboard-settings`, `i3`, `dwm`).
-
----
-
-## Tabla de contenidos
-
-1. [Caracteristicas](#caracteristicas)
-2. [Instalacion](#instalacion)
-3. [Inicio rapido](#inicio-rapido)
-4. [Acciones](#acciones)
-5. [Opciones](#opciones)
-6. [Perfiles y plantillas](#perfiles-y-plantillas)
-7. [Salida estructurada](#salida-estructurada)
-8. [Variables de entorno](#variables-de-entorno)
-9. [Backends de portapapeles](#backends-de-portapapeles)
-10. [Slots e historial](#slots-e-historial)
-11. [Recetas y casos de uso](#recetas-y-casos-de-uso)
-12. [Integracion con gestores de atajos](#integracion-con-gestores-de-atajos)
-13. [Embeber 2Clipboard en otros scripts](#embeber-2clipboard-en-otros-scripts)
-14. [Solucion de problemas](#solucion-de-problemas)
-15. [Documentacion adicional](#documentacion-adicional)
-16. [Hoja de ruta](#hoja-de-ruta)
-17. [Licencia](#licencia)
+Built for developers, LLM prompting workflows, engineering logs,
+zettelkasten and shortcut daemons (`sxhkd`, `xbindkeys`,
+`xfce4-keyboard-settings`, `i3`, `sway`, `hyprland`, `dwm`).
 
 ---
 
-## Caracteristicas
+## Table of contents
 
-- **Identificadores unicos y legibles.** Combina fecha, nombre pronunciable
-  tipo marca (`kamishin`, `valeri`, `rafinton`) y hash criptografico corto
+1. [Features](#features)
+2. [Install](#install)
+3. [Quick start](#quick-start)
+4. [Actions](#actions)
+5. [Options](#options)
+6. [Profiles and templates](#profiles-and-templates)
+7. [Structured output](#structured-output)
+8. [Environment variables](#environment-variables)
+9. [Clipboard backends](#clipboard-backends)
+10. [Slots and history](#slots-and-history)
+11. [Recipes](#recipes)
+12. [Keybinding daemons](#keybinding-daemons)
+13. [Embedding in other scripts](#embedding-in-other-scripts)
+14. [Troubleshooting](#troubleshooting)
+15. [Documentation](#documentation)
+16. [Roadmap](#roadmap)
+17. [License](#license)
+
+---
+
+## Features
+
+- **Unique, readable identifiers.** Combines date, brand-like pronounceable
+  name (`kamishin`, `valeri`, `rafinton`) and a short cryptographic hash
   (`openssl rand -hex`).
-- **Adjuntos con cabecera de metadatos.** Copia el contenido de un archivo
-  con encabezado trazable: fecha, ID unico, tags, fuente.
-- **Ejecutor de comandos.** Corre cualquier comando, captura `stdout+stderr`,
-  incluye el exit code y lo copia todo, propagando el exit code original.
-- **Validador booleano.** `check PATH` copia `true` o `false` (existencia de
-  archivo, carpeta o comando en `PATH`).
-- **Captura de git.** `git` copia branch, commit, archivos sucios y remote.
-- **Plantillas y perfiles.** Archivos `.tpl` en
-  `~/.config/2Clipboard/templates/` con variables `{{TITLE}}`, `{{DATE}}`,
-  `{{ID}}`, `{{TAGS}}`, `{{CONTENT}}`, `{{SOURCE}}`, `{{STATUS}}`, `{{CMD}}`,
+- **Attachments with metadata header.** Copy file contents preceded by a
+  traceable header: date, unique ID, tags, source path.
+- **Command runner.** Run any command, capture `stdout+stderr`, include the
+  exit code and copy the whole thing — propagating the exit code so you can
+  chain it in pipelines.
+- **Boolean validator.** `check PATH` copies `true` or `false` (file,
+  directory, or command on `PATH`).
+- **Git snapshot.** `git` copies branch, commit, dirty files and remote.
+- **Templates and profiles.** `.tpl` files in
+  `~/.config/2Clipboard/templates/` with `{{TITLE}}`, `{{DATE}}`, `{{ID}}`,
+  `{{TAGS}}`, `{{CONTENT}}`, `{{SOURCE}}`, `{{STATUS}}`, `{{CMD}}`,
   `{{HOST}}`, `{{USER}}`, `{{CWD}}`, `{{GIT_BRANCH}}`, `{{GIT_COMMIT}}`,
   `{{NOW}}`, `{{VERSION}}`.
-- **Cuatro formatos de salida.** `markdown`, `plain`, `json`, `yaml`.
-- **Modo pipe.** Lee de stdin automaticamente; `--stdout` emite el payload
-  limpio (mensajes a stderr) para encadenar a `jq`, `yq`, `curl`.
-- **Append / prepend.** Suma al portapapeles actual en lugar de reemplazarlo.
-- **Slots con nombre.** Guarda y recupera el portapapeles.
-- **Historial.** `~/.cache/2Clipboard/history.log`, con `grep PAT` y `clear`.
-- **Deteccion real de backend.** Wayland solo si el socket existe; X11 si
-  `DISPLAY` esta definido; override con `TWOCLIP_BACKEND`.
-- **Autoinstalacion en `PATH`.** Desactivable con `TWOCLIP_NO_INSTALL=1`.
-- **Silencioso.** `--silent` / `--quiet` sin stdout/stderr, ideal para `sxhkd`.
-- **Validacion estricta.** `--word-len` / `--hash-chars` entre 1 y 64.
-- **Traza opcional.** `TWOCLIP_DEBUG=1` para diagnostico.
+- **Four output formats.** `markdown`, `plain`, `json`, `yaml`.
+- **Pipe mode.** Reads from stdin automatically; `--stdout` writes the clean
+  payload to stdout (status messages go to stderr) for chaining into `jq`,
+  `yq`, `curl`.
+- **Append / prepend.** Add to the current clipboard instead of replacing.
+- **Named slots.** Save and restore clipboard contents.
+- **History.** `~/.cache/2Clipboard/history.log` with `grep PAT` and `clear`.
+- **Real backend detection.** Wayland only if the socket exists; X11 if
+  `DISPLAY` is set; override with `TWOCLIP_BACKEND`.
+- **Self-install into `PATH`.** Disable with `TWOCLIP_NO_INSTALL=1`.
+- **Silent mode.** `--silent` / `--quiet` with no stdout/stderr, ideal for
+  `sxhkd`.
+- **Strict validation.** `--word-len` / `--hash-chars` between 1 and 64.
+- **Optional tracing.** `TWOCLIP_DEBUG=1` for diagnostics.
 
 ---
 
-## Instalacion
+## Install
 
-### Dependencias por distro
+### Per-distro dependencies
 
-Solo necesitas Bash 4+, un backend de portapapeles y, opcionalmente,
-`notify-send` y `jq`.
+You only need Bash 4+, a clipboard backend, and optionally `notify-send`
+and `jq`.
 
-| Distro | Backend X11 | Backend Wayland |
+| Distro | X11 backend | Wayland backend |
 |---|---|---|
 | Arch / Manjaro | `sudo pacman -S xclip libnotify jq` | `sudo pacman -S wl-clipboard` |
 | Debian / Ubuntu | `sudo apt install xclip libnotify-bin jq` | `sudo apt install wl-clipboard` |
@@ -92,10 +99,10 @@ Solo necesitas Bash 4+, un backend de portapapeles y, opcionalmente,
 | Gentoo | `sudo emerge -av x11-misc/xclip x11-libs/libnotify app-misc/jq` | `sudo emerge -av gui-apps/wl-clipboard` |
 | NixOS | `nix-shell -p xclip libnotify jq` | `nix-shell -p wl-clipboard` |
 
-Guia detallada, incluyendo RHEL 8, CentOS Stream, Rocky, AlmaLinux y
-macOS: ver [INSTALL.md](INSTALL.md).
+Full guide (RHEL 8, CentOS Stream, Rocky, AlmaLinux, macOS):
+see [INSTALL.md](INSTALL.md).
 
-### Instalacion desde el fuente
+### From source
 
     git clone https://github.com/iendure/2Clipboard.git ~/.local/src/2Clipboard
     cd ~/.local/src/2Clipboard
@@ -103,7 +110,7 @@ macOS: ver [INSTALL.md](INSTALL.md).
     hash -r
     2Clipboard --version
 
-### Instalacion sin git
+### Without git
 
     curl -fsSL https://github.com/iendure/2Clipboard/archive/refs/tags/v2.2.0.tar.gz \
         | tar -xz -C /tmp
@@ -111,127 +118,127 @@ macOS: ver [INSTALL.md](INSTALL.md).
     make install
     hash -r
 
-### Estructura creada
+### Directory layout created at first run
 
-    ~/.config/2Clipboard/templates/    <- plantillas .tpl
-    ~/.cache/2Clipboard/history.log    <- historial
-    ~/.cache/2Clipboard/slots/         <- slots con nombre
+    ~/.config/2Clipboard/templates/    <- your .tpl files
+    ~/.cache/2Clipboard/history.log    <- operation log
+    ~/.cache/2Clipboard/slots/         <- named slots
 
-Detalles completos (dependencias por distro, integracion con sxhkd, i3,
-sway, Hyprland, XFCE4, troubleshooting): [INSTALL.md](INSTALL.md).
+Full details in [INSTALL.md](INSTALL.md) · Spanish:
+[INSTALL_es.md](INSTALL_es.md).
 
 ---
 
-## Inicio rapido
+## Quick start
 
-    # Codigo de proyecto clasico (v1)
+    # Classic project code (v1)
     2Clipboard gen
     # -> [2026-10-09]-kamishin-cdb28c17
 
-    # Solo el identificador
+    # Identifier only
     2Clipboard id
     # -> zeciiaoo-bc811448
 
-    # Encabezado markdown con campos en blanco
+    # Markdown header with blank fields
     2Clipboard header
 
-    # Adjuntar un archivo con cabecera trazable
-    2Clipboard file ~/notas.md --title "Notas" --tags "journal,personal"
+    # Attach a file with a traceable header
+    2Clipboard file ~/notes.md --title "Notes" --tags "journal,personal"
 
-    # Encabezado en blanco + contenido de un archivo
+    # Blank header + file contents (SYSPROMPT-style workflow)
     2Clipboard header --body @~/prompt.md --title "" --tags ""
 
-    # Correr un comando y copiar su salida
+    # Run a command and copy its output
     2Clipboard run -- ls -la /etc
 
-    # Validar existencia (copia "true" o "false")
+    # Boolean validation (copies "true" or "false")
     2Clipboard check /etc/hosts
 
 ---
 
-## Acciones
+## Actions
 
-   2Clipboard [ACCION] [OPCIONES...]
+    2Clipboard [ACTION] [OPTIONS...]
 
-Sin accion → `gen`.
+Default action is `gen`.
 
-| Accion | Alias | Descripcion |
+| Action | Alias | Description |
 |---|---|---|
-| `gen` | — | Identificador de proyecto (fecha + nombre + hash). Modo v1. |
-| `header` | `head` | Solo el encabezado (con Date/ID/Tags listos para rellenar). |
-| `id` | — | Solo el ID (`nombre-hash`). Util para scripting. |
-| `text STR` | — | Copia un literal con cabecera. |
-| `file PATH` | — | Copia un archivo con cabecera. |
-| `run -- CMD [ARGS]` | — | Ejecuta CMD, captura stdout+stderr y su exit, propaga el exit. |
-| `check PATH` | — | `true` si existe (archivo/carpeta/comando), si no `false`. |
-| `git` | — | Branch, commit, archivos sucios, remote. |
-| `env VAR` | — | Valor de una variable de entorno. |
-| `slot save NAME` | — | Guarda el portapapeles actual en un slot. |
-| `slot load NAME` | — | Restaura un slot al portapapeles. |
-| `slot list` | — | Lista slots existentes. |
-| `slot del NAME` | `slot rm` | Elimina un slot. |
-| `paste` | — | Imprime el portapapeles a stdout. |
-| `history [N]` | — | Ultimas N entradas (def. 20). |
-| `history grep PAT` | — | Filtra entradas por patron. |
-| `history clear` | — | Vacia el historial. |
-| `version` | — | Imprime la version. |
+| `gen` | — | Project identifier (date + name + hash). v1 mode. |
+| `header` | `head` | Header only (Date/ID/Tags ready to fill in). |
+| `id` | — | Identifier only (`name-hash`). For scripting. |
+| `text STR` | — | Copy a literal with header. |
+| `file PATH` | — | Copy a file with header. |
+| `run -- CMD [ARGS]` | — | Run CMD, capture stdout+stderr and exit code, propagate exit. |
+| `check PATH` | — | `true` if it exists (file/directory/command), otherwise `false`. |
+| `git` | — | Branch, commit, dirty files, remote. |
+| `env VAR` | — | Value of an environment variable. |
+| `slot save NAME` | — | Save current clipboard into a slot. |
+| `slot load NAME` | — | Restore a slot to the clipboard. |
+| `slot list` | — | List existing slots. |
+| `slot del NAME` | `slot rm` | Delete a slot. |
+| `paste` | — | Print clipboard to stdout. |
+| `history [N]` | — | Last N entries (default 20). |
+| `history grep PAT` | — | Filter entries by pattern. |
+| `history clear` | — | Empty the history. |
+| `version` | — | Print the version. |
 
 ---
 
-## Opciones
+## Options
 
-### Generacion (aplican a `gen`)
+### Generation (`gen`)
 
-| Opcion | Defecto | Descripcion |
+| Option | Default | Description |
 |---|---|---|
-| `-w`, `--word-len LEN` | `8` | Longitud del nombre (1-64). |
-| `-H`, `--hash-chars CHARS` | `8` | Longitud del hash (1-64). |
-| `--no-name` | — | Omite el nombre. |
-| `--no-hash` | — | Omite el hash. |
-| `--date-format FMT` | `%Y-%m-%d` | Formato `strftime` (`""` desactiva). |
-| `--time-format FMT` | desactivado | Formato `strftime` (ej. `%H:%M`). |
-| `--date-prefix STR` | `[` | Prefijo antes de la fecha. |
-| `--date-suffix STR` | `]` | Sufijo tras la fecha. |
-| `--name-prefix STR` | `-` | Prefijo antes del nombre. |
-| `--name-suffix STR` | `""` | Sufijo tras el nombre. |
-| `--hash-prefix STR` | `-` | Prefijo antes del hash. |
+| `-w`, `--word-len LEN` | `8` | Name length (1-64). |
+| `-H`, `--hash-chars CHARS` | `8` | Hash length (1-64). |
+| `--no-name` | — | Skip the name. |
+| `--no-hash` | — | Skip the hash. |
+| `--date-format FMT` | `%Y-%m-%d` | `strftime` format (`""` disables). |
+| `--time-format FMT` | off | `strftime` format (e.g. `%H:%M`). |
+| `--date-prefix STR` | `[` | Prefix before the date. |
+| `--date-suffix STR` | `]` | Suffix after the date. |
+| `--name-prefix STR` | `-` | Prefix before the name. |
+| `--name-suffix STR` | `""` | Suffix after the name. |
+| `--hash-prefix STR` | `-` | Prefix before the hash. |
 
-> `-h` esta reservado para `--help`; el atajo del hash es `-H`.
+> `-h` is reserved for `--help`; the hash shortcut is `-H`.
 
-### Cabecera y formato (todas las acciones)
+### Header and format (all actions)
 
-| Opcion | Descripcion |
+| Option | Description |
 |---|---|
-| `--title STR` | Titulo de la cabecera. |
-| `--tags STR` | Tags separados por coma. |
-| `--no-title` | Suprime la linea `# ` del titulo. |
-| `--header` / `--no-header` | Fuerza / desactiva cabecera. |
+| `--title STR` | Header title. |
+| `--tags STR` | Comma-separated tags. |
+| `--no-title` | Skip the `# ` title line. |
+| `--header` / `--no-header` | Force / disable header. |
 | `--format FMT` | `markdown` \| `plain` \| `json` \| `yaml`. |
-| `--template STR` | Plantilla inline, o `@ruta` a un `.tpl`. |
-| `--profile NAME` | Atajo de `--template @NAME`. |
-| `--body STR` | Cuerpo inline (con `header`). |
-| `--body @PATH` | Cuerpo desde archivo (atajo). |
-| `--body-file PATH` | Cuerpo desde archivo (forma larga). |
+| `--template STR` | Inline template or `@path` to a `.tpl`. |
+| `--profile NAME` | Shorthand for `--template @NAME`. |
+| `--body STR` | Inline body (with `header`). |
+| `--body @PATH` | Body from a file (shortcut). |
+| `--body-file PATH` | Body from a file (long form). |
 
-### Comportamiento (todas las acciones)
+### Behavior (all actions)
 
-| Opcion | Descripcion |
+| Option | Description |
 |---|---|
-| `--append` | Suma al final del portapapeles actual. |
-| `--prepend` | Suma al principio del portapapeles actual. |
-| `--stdout` | Emite el payload por stdout (mensajes a stderr). |
-| `--dry-run` | No copia: solo imprime. |
-| `--clip-cmd CMD` | Filtra el payload por `bash -c CMD` (payload por stdin). |
-| `--silent`, `--quiet` | Silencia toda salida. |
-| `--no-notify` | Sin notificaciones de escritorio. |
-| `--no-history` | No registra en el historial. |
-| `-h`, `--help` | Muestra la ayuda. |
-| `-v`, `--version` | Muestra la version. |
-| `--license` | Muestra la licencia (MIT). |
+| `--append` | Add to the end of the current clipboard. |
+| `--prepend` | Add to the beginning of the current clipboard. |
+| `--stdout` | Write the payload to stdout (messages go to stderr). |
+| `--dry-run` | Don't copy, just print. |
+| `--clip-cmd CMD` | Filter the payload through `bash -c CMD` (payload via stdin). |
+| `--silent`, `--quiet` | Silence all output. |
+| `--no-notify` | No desktop notifications. |
+| `--no-history` | Don't record in the history. |
+| `-h`, `--help` | Show help. |
+| `-v`, `--version` | Show version. |
+| `--license` | Show the MIT license. |
 
 ---
 
-## Perfiles y plantillas
+## Profiles and templates
 
     ~/.config/2Clipboard/templates/
     |- llm.tpl
@@ -240,12 +247,18 @@ Sin accion → `gen`.
     |- bug.tpl
     `- minimal.tpl
 
-Un perfil es una plantilla con nombre. Se invoca con `--profile NAME`, o
-mediante `TWOCLIP_PROFILE`.
+A profile is just a named template. Invoke with `--profile NAME`, or via
+`TWOCLIP_PROFILE`.
 
-### Plantillas de referencia
+Ready-to-use templates ship in [`examples/templates/`](examples/templates/).
+Copy them into `~/.config/2Clipboard/templates/` once:
 
-`llm.tpl` — sesiones LLM:
+    mkdir -p ~/.config/2Clipboard/templates
+    cp examples/templates/*.tpl ~/.config/2Clipboard/templates/
+
+### Reference templates
+
+`llm.tpl` — LLM sessions:
 
     # {{TITLE}}
     - Date: **{{DATE}}**  ·  ID: **{{ID}}**
@@ -264,7 +277,7 @@ mediante `TWOCLIP_PROFILE`.
 
     {{CONTENT}}
 
-`work.tpl` — bitacora laboral:
+`work.tpl` — work log:
 
     [{{DATE}} {{TIME}}] {{ID}}
     Tags: {{TAGS}}
@@ -272,7 +285,7 @@ mediante `TWOCLIP_PROFILE`.
     ---
     {{CONTENT}}
 
-`bug.tpl` — reporte de bug:
+`bug.tpl` — bug report:
 
     ## Bug Report {{ID}}
 
@@ -284,56 +297,56 @@ mediante `TWOCLIP_PROFILE`.
     ### Output
     {{CONTENT}}
 
-`minimal.tpl` — una linea y tags:
+`minimal.tpl` — one line and tags:
 
     {{TITLE}} — {{DATE}} — {{ID}} — [{{TAGS}}]
 
     {{CONTENT}}
 
-### Variables disponibles
+### Template variables
 
-| Variable | Contenido |
+| Variable | Contents |
 |---|---|
-| `{{TITLE}}` | Titulo (`--title`). |
-| `{{DATE}}` | Fecha formateada. |
-| `{{TIME}}` | Hora formateada. |
-| `{{ID}}` | Identificador completo (`nombre-hash`). |
-| `{{NAME}}` | Solo el nombre pronunciable. |
-| `{{HASH}}` | Solo el hash. |
-| `{{TAGS}}` | Tags tal cual. |
-| `{{SOURCE}}` | Ruta de origen. |
-| `{{CONTENT}}` | Cuerpo. |
+| `{{TITLE}}` | Title (`--title`). |
+| `{{DATE}}` | Formatted date. |
+| `{{TIME}}` | Formatted time. |
+| `{{ID}}` | Full identifier (`name-hash`). |
+| `{{NAME}}` | Pronounceable name only. |
+| `{{HASH}}` | Hash only. |
+| `{{TAGS}}` | Tags as passed. |
+| `{{SOURCE}}` | Source path. |
+| `{{CONTENT}}` | Body. |
 | `{{STATUS}}` | Exit code (`run`). |
-| `{{CMD}}` | Comando ejecutado (`run`). |
+| `{{CMD}}` | Executed command (`run`). |
 | `{{HOST}}` | `hostname`. |
 | `{{USER}}` | `$USER`. |
-| `{{CWD}}` | Directorio actual. |
-| `{{GIT_BRANCH}}` | Rama git. |
-| `{{GIT_COMMIT}}` | Commit corto git. |
-| `{{NOW}}` | Fecha+hora ISO 8601. |
-| `{{VERSION}}` | Version de 2Clipboard. |
+| `{{CWD}}` | Current directory. |
+| `{{GIT_BRANCH}}` | Git branch. |
+| `{{GIT_COMMIT}}` | Short git commit. |
+| `{{NOW}}` | ISO 8601 date+time. |
+| `{{VERSION}}` | 2Clipboard version. |
 
 ---
 
-## Salida estructurada
+## Structured output
 
-### `markdown` (defecto)
+### `markdown` (default)
 
-    # Titulo
+    # Title
     - Date: **2026-10-09**
     - ID: **docigoji-e0d69df6**
     - Tags: ai,work
 
-    <cuerpo>
+    <body>
 
 ### `plain`
 
-    Titulo
+    Title
     Date: 2026-10-09
     ID: docigoji-e0d69df6
     Tags: ai,work
 
-    <cuerpo>
+    <body>
 
 ### `json`
 
@@ -358,147 +371,147 @@ mediante `TWOCLIP_PROFILE`.
     content: |
       ...
 
-### Pipeline end-to-end
+### End-to-end pipelines
 
-`--stdout` emite **solo** el payload por stdout; los mensajes van a stderr:
+`--stdout` writes **only** the payload to stdout; messages go to stderr.
 
-    # Extraer el ID de una sesion
+    # Extract a session ID
     2Clipboard header --format json --tags "ai" --stdout 2>/dev/null | jq -r .id
 
-    # Alimentar una API con el payload estructurado
+    # Feed a structured payload to an API
     2Clipboard file prompt.md --format json --stdout 2>/dev/null \
         | curl -s https://api.example.com/v1/chat -d @-
 
-    # Acumular sesiones en un YAML
+    # Accumulate sessions in a YAML file
     2Clipboard header --format yaml --tags "meta" --stdout 2>/dev/null \
         >> ~/sessions.yaml
 
 ---
 
-## Variables de entorno
+## Environment variables
 
-| Variable | Efecto |
+| Variable | Effect |
 |---|---|
-| `TWOCLIP_PROFILE` | Perfil por defecto (equivale a `--profile`). |
-| `TWOCLIP_TAGS` | Tags por defecto. |
-| `TWOCLIP_TITLE` | Titulo por defecto. |
-| `TWOCLIP_BACKEND` | `x11` o `wayland` (defecto `auto`). |
-| `TWOCLIP_NO_INSTALL` | `1` desactiva el auto-install. |
-| `TWOCLIP_DEBUG` | `1` activa traza detallada. |
+| `TWOCLIP_PROFILE` | Default profile (same as `--profile`). |
+| `TWOCLIP_TAGS` | Default tags. |
+| `TWOCLIP_TITLE` | Default title. |
+| `TWOCLIP_BACKEND` | `x11` or `wayland` (default `auto`). |
+| `TWOCLIP_NO_INSTALL` | `1` disables self-install. |
+| `TWOCLIP_DEBUG` | `1` enables verbose tracing. |
 
-Las banderas CLI tienen mayor prioridad que las variables.
-
----
-
-## Backends de portapapeles
-
-Deteccion real, por orden:
-
-1. `TWOCLIP_BACKEND=x11|wayland` -> se usa tal cual.
-2. `WAYLAND_DISPLAY` definido **y** socket presente -> Wayland.
-3. `XDG_SESSION_TYPE=wayland` **y** socket `wayland-0` -> Wayland.
-4. `DISPLAY` definido -> X11 (`xclip`, luego `xsel`).
-5. Nada -> el payload se imprime a stdout para no perderlo.
-
-Evita el clasico *"Failed to connect to a Wayland server"* en maquinas X11
-que tienen `wl-copy` instalado como dependencia de otra cosa.
+CLI flags always override environment variables.
 
 ---
 
-## Slots e historial
+## Clipboard backends
 
-    # Guardar el portapapeles actual
+Real detection, in order:
+
+1. `TWOCLIP_BACKEND=x11|wayland` -> used as-is.
+2. `WAYLAND_DISPLAY` set **and** socket present -> Wayland.
+3. `XDG_SESSION_TYPE=wayland` **and** `wayland-0` socket -> Wayland.
+4. `DISPLAY` set -> X11 (`xclip`, then `xsel`).
+5. Nothing -> payload is printed to stdout so you don't lose it.
+
+This avoids the classic *"Failed to connect to a Wayland server"* on X11
+machines that happen to have `wl-copy` installed as a dependency.
+
+---
+
+## Slots and history
+
+    # Save the current clipboard
     2Clipboard slot save 2fa
 
-    # Restaurarlo
+    # Restore it
     2Clipboard slot load 2fa
 
-    # Listar, borrar
+    # List, delete
     2Clipboard slot list
     2Clipboard slot del 2fa
 
-    # Guardar desde stdin
-    echo "contenido" | 2Clipboard slot save borrador
+    # Save from stdin
+    echo "content" | 2Clipboard slot save draft
 
-    # Historial
+    # History
     2Clipboard history 50
     2Clipboard history grep ai
     2Clipboard history clear
 
-Formato: `fecha<TAB>accion<TAB>preview(120 chars)`.
+Format: `date<TAB>action<TAB>preview(120 chars)`.
 
 ---
 
-## Recetas y casos de uso
+## Recipes
 
-### A. Encabezado solo, con campos en blanco
+### A. Header only, with blank fields
 
     2Clipboard header --tags ""
 
-### B. Prompt de sistema para LLM con trazabilidad
+### B. System prompt for LLMs with traceability
 
     2Clipboard header --body @~/prompt.md --title "" --tags ""
 
-### C. Pregunta corta para chat IA
+### C. Short question for AI chat
 
-    2Clipboard header --body "Como optimizo esta consulta SQL?" --tags "ai,sql,question"
+    2Clipboard header --body "How do I optimize this SQL query?" --tags "ai,sql,question"
 
-### D. Pegar codigo con contexto
+### D. Paste code with context
 
     sed -n '1,200p' src/main.py | 2Clipboard header --title "main.py" --tags "ai,code,snippet"
 
-### E. Bitacora de trabajo diaria
+### E. Daily work log
 
     2Clipboard header --profile work --title "Log $(date +%A)" --tags "journal"
 
-### F. Reporte de bug
+### F. Bug report
 
     2Clipboard run -- ./repro.sh
-    # o:
+    # or:
     2Clipboard header --profile bug --body @/tmp/repro.log --tags "bug,repro"
 
 ### G. Commit log
 
     git log --oneline -20 | 2Clipboard header --title "Recent Commits" --tags "git,log"
 
-### H. Validar antes de actuar
+### H. Validate before acting
 
     if [ "$(2Clipboard check /etc/nginx/nginx.conf --silent)" = "true" ]; then
         systemctl restart nginx
     fi
 
-### I. ID para scripting
+### I. ID for scripting
 
     SID="$(2Clipboard id --silent)"
     mkdir -p "/tmp/$SID"
 
-### J. Modificar el portapapeles sin reemplazarlo
+### J. Modify the clipboard without replacing it
 
     2Clipboard header --tags "refined" --prepend
-    echo -e "\n\n---\nNota" | 2Clipboard text --append --no-header
+    echo -e "\n\n---\nNote" | 2Clipboard text --append --no-header
     2Clipboard file a.md --append
     2Clipboard file b.md --append
 
-### K. JSON / YAML para automatizacion
+### K. JSON / YAML for automation
 
     2Clipboard header --format json --tags "ai" --stdout 2>/dev/null | jq -r .id
     2Clipboard header --format yaml --tags "meta" --stdout 2>/dev/null >> ~/session.yaml
 
-### L. Wrappers de otros scripts
+### L. Wrappers
 
     snapshot() {
         local title="${1:-Auto}"
         2Clipboard git --title "$title" --append --silent
     }
 
-### M. Slots para secretos temporales
+### M. Slots for temporary secrets
 
     2Clipboard slot save 2fa
     2Clipboard slot load 2fa
 
 ---
 
-## Integracion con gestores de atajos
+## Keybinding daemons
 
 ### sxhkd
 
@@ -518,13 +531,19 @@ Formato: `fecha<TAB>accion<TAB>preview(120 chars)`.
 
     bindsym $mod+c exec --no-startup-id 2Clipboard git --silent
 
+### Hyprland
+
+    bind = ALT, Insert, exec, 2Clipboard header --profile llm --silent
+    bind = SUPER, C,    exec, 2Clipboard git --silent
+
 ### XFCE4
 
-Configuracion -> Teclado -> Atajos, asigna `2Clipboard header --profile llm --silent`.
+Settings -> Keyboard -> Application Shortcuts, add
+`2Clipboard header --profile llm --silent`.
 
 ---
 
-## Embeber 2Clipboard en otros scripts
+## Embedding in other scripts
 
     #!/usr/bin/env bash
     set -euo pipefail
@@ -533,96 +552,89 @@ Configuracion -> Teclado -> Atajos, asigna `2Clipboard header --profile llm --si
     sid="$(2Clipboard id --silent --stdout)"
     payload="$(2Clipboard header --format json --tags "batch" --stdout 2>/dev/null)"
     echo "$payload" | jq -r .id
-    echo "Sesion: $sid"
+    echo "Session: $sid"
 
-- `TWOCLIP_NO_INSTALL=1` — no reescribe el binario desplegado.
-- `--silent` — cero salida por stdout/stderr.
-- `--stdout` — payload por stdout; mensajes a stderr.
-- `--dry-run` — no toca el portapapeles.
+- `TWOCLIP_NO_INSTALL=1` — do not overwrite the deployed binary.
+- `--silent` — no stdout/stderr output.
+- `--stdout` — payload to stdout; messages to stderr.
+- `--dry-run` — do not touch the clipboard.
 
 ---
 
-## Solucion de problemas
+## Troubleshooting
 
-### *Failed to connect to a Wayland server* en X11
+### *Failed to connect to a Wayland server* on X11
 
     export TWOCLIP_BACKEND=x11
 
 ### `line NNN: GIT_BRANCH: unbound variable`
 
-Version desplegada obsoleta:
+Stale deployed binary:
 
-    ~/.bin/2Clipboard --version
+    ~/.local/bin/2Clipboard --version
     hash -r
     2Clipboard --version
 
-### `jq: parse error` al pipear
+### `jq: parse error` after piping
 
-Los mensajes van a stderr en 2.2.0. Verifica:
+Status messages go to stderr since 2.2.0. Verify:
 
-    grep 'copied to clipboard' ~/.bin/2Clipboard
-    # debe terminar en:  >&2 ;;
+    grep 'copied to clipboard' ~/.local/bin/2Clipboard
+    # should end with:  >&2 ;;
 
-### Pipeline colgado tras `| head`
+### Pipeline hangs after `| head`
 
-La version actual redirige `xclip` a `/dev/null`:
+`xclip`'s daemon inherits stdout and keeps the pipe open. 2.2.0 redirects
+to `/dev/null`:
 
-    grep 'xclip -selection clipboard -i' ~/.bin/2Clipboard
+    grep 'xclip -selection clipboard -i' ~/.local/bin/2Clipboard
 
-### `--body @ruta` no carga el archivo
+### `--body @path` does not read the file
 
-    grep -A3 '\-\-body)' ~/.bin/2Clipboard
-    # debe contener:  @*) BODY="${BODY#@}"; BODY_IS_FILE=true ;;
+    grep -A3 '\-\-body)' ~/.local/bin/2Clipboard
+    # should contain:  @*) BODY="${BODY#@}"; BODY_IS_FILE=true ;;
 
-### Los tests fallan con `binary: ~/.bin`
-
-    BIN="$(command -v 2Clipboard)" bash tests/smoke.sh
-
-o con diagnostico:
-
-    VERBOSE=1 bash tests/smoke.sh
-
-### Traza detallada de cualquier operacion
+### Verbose trace
 
     TWOCLIP_DEBUG=1 2Clipboard header --tags test
 
 ---
 
-## Documentacion adicional
+## Documentation
 
-- [INSTALL.md](INSTALL.md) — instalacion detallada, integracion, troubleshooting.
-- [CHANGELOG.md](CHANGELOG.md) — historial de versiones.
-- [tests/smoke.sh](tests/smoke.sh) — suite de pruebas de humo.
-
----
-
-## Hoja de ruta
-
-- [ ] Config file persistente (`~/.config/2Clipboard/config`).
-- [ ] Modo diccionario / wordlist con palabras reales.
-- [ ] Menu TUI / rofi / dmenu.
-- [ ] Busqueda en historial con `fzf`.
-- [ ] Exportacion enriquecida: HTML, org-mode.
-- [ ] Encriptacion de slots con `age` o `gpg`.
-- [ ] Multi-portapapeles por workspace.
+- [INSTALL.md](INSTALL.md) — multi-distro installation.
+- [CHANGELOG.md](CHANGELOG.md) — version history.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute.
+- [examples/templates/](examples/templates/) — ready-to-copy `.tpl` files.
+- [docs/](docs/) — documentation sources for the future website.
+- Spanish: [README_es.md](README_es.md) · [INSTALL_es.md](INSTALL_es.md) ·
+  [CHANGELOG_es.md](CHANGELOG_es.md) · [CONTRIBUTING_es.md](CONTRIBUTING_es.md).
 
 ---
 
-## ENDURE
+## Roadmap
 
-**Built to last.**
-
-| Canal | Enlace |
-|---|---|
-| Web | https://endure.digital/ |
-| GitHub | https://github.com/iendure |
-| Contacto | https://c.endure.digital/ |
-| WhatsApp | https://w.endure.digital/ |
+- [ ] Persistent config file (`~/.config/2Clipboard/config`).
+- [ ] Dictionary / wordlist mode with real words.
+- [ ] TUI / rofi / dmenu picker.
+- [ ] History search with `fzf`.
+- [ ] Richer export: HTML, org-mode.
+- [ ] Slot encryption with `age` or `gpg`.
+- [ ] Per-workspace multi-clipboard.
 
 ---
 
-## Licencia
+## License
 
-MIT. Ver [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 Copyright (c) 2026 ENDURE · Built to last.
+
+---
+
+<p align="center">
+  <a href="https://endure.digital/">Web</a> ·
+  <a href="https://github.com/iendure">GitHub</a> ·
+  <a href="https://c.endure.digital/">Contact</a> ·
+  <a href="https://w.endure.digital/">WhatsApp</a>
+</p>

@@ -14,7 +14,7 @@ BINDIR  ?= $(PREFIX)/bin
 DESTDIR ?=
 VERSION := $(shell grep -m1 '^readonly VERSION=' $(SRC) | cut -d'"' -f2)
 
-.PHONY: all install uninstall test lint check help clean release dist about
+.PHONY: all install uninstall test lint check help clean release dist about docs templates list
 
 all: help
 
@@ -34,6 +34,9 @@ help:
 	@echo "  make release      Crea dist/2Clipboard-$(VERSION).tar.gz + .sha256"
 	@echo "  make clean        Limpia backups, dist/ y temporales"
 	@echo "  make about        Muestra la identidad ENDURE"
+	@echo "  make docs         Lista los sources de docs/"
+	@echo "  make templates    Lista las plantillas de ejemplo"
+	@echo "  make list         Lista los archivos trackeados"
 
 install:
 	@mkdir -p "$(DESTDIR)$(BINDIR)"
@@ -76,3 +79,18 @@ clean:
 	@rm -f *.bak.* *.tmp 2>/dev/null || true
 	@rm -rf dist 2>/dev/null || true
 	@echo "[ok] Limpio"
+
+docs:
+	@echo "Documentation sources in docs/ — 8 pages ready for an SSG."
+	@ls -1 docs/*.md
+
+templates:
+	@echo "Example templates in examples/templates/ — copy them with:"
+	@echo "  mkdir -p ~/.config/$(NAME)/templates"
+	@echo "  cp examples/templates/*.tpl ~/.config/$(NAME)/templates/"
+	@ls -1 examples/templates/*.tpl
+
+list:
+	@echo "== Tracked files =="
+	@git ls-files 2>/dev/null || find . -type f -not -path './.git/*' | sort
+

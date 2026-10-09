@@ -1,0 +1,23 @@
+# Backups locales
+*.bak.*
+*.bak
+*.tmp
+
+# Artefactos de pruebas
+.pytest_cache/
+__pycache__/
+*.pyc
+
+# Archivo histórico local
+.archive/
+
+# Distribución
+dist/
+*.tar.gz
+*.tar.gz.sha256
+
+# Scratch / salidas manuales
+2Clipboard.next
+2Clipboard--*/
+fix-tests-and-actions.sh
+release-*.py

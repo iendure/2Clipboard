@@ -1,0 +1,41 @@
+name: CI
+# ENDURE · Built to last — https://endure.digital/
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+              jq shellcheck openssl
+
+      - name: Syntax check
+        run: bash -n 2Clipboard && bash -n tests/smoke.sh
+
+      - name: ShellCheck
+        run: shellcheck -S warning 2Clipboard || true
+
+      - name: Smoke tests
+        env:
+          TWOCLIP_NO_INSTALL: "1"
+          TWOCLIP_BACKEND: "none"
+        run: bash tests/smoke.sh
+
+      - name: CLI sanity
+        env:
+          TWOCLIP_NO_INSTALL: "1"
+          TWOCLIP_BACKEND: "none"
+        run: |
+          ./2Clipboard --version
+          ./2Clipboard header --tags test --stdout
+          ./2Clipboard header --format json --tags ai --stdout 2>/dev/null | jq -e . >/dev/null

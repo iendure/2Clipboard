@@ -1,0 +1,990 @@
+#!/usr/bin/env bash
+# ==============================================================================
+#  2Clipboard v2.2.0 — Universal clipboard utility
+#  -----------------------------------------------------------------------------
+#  Genera códigos de proyecto, adjunta archivos con cabecera de metadatos,
+#  captura salida de comandos, valida rutas, formatea markdown/plain/json/yaml
+#  y copia al portapapeles del sistema. Notifica y copia.
+#
+#  Wrapper-friendly: lee stdin; `run` propaga el exit code del comando envuelto.
+#
+#  ENDURE · Built to last
+#    Web:      https://endure.digital/
+#    GitHub:   https://github.com/iendure
+#    Contact:  https://c.endure.digital/
+#    WhatsApp: https://w.endure.digital/
+#
+#  License: MIT  ·  Copyright (c) 2026 ENDURE
+# ==============================================================================
+
+set -euo pipefail
+
+readonly VERSION="2.2.0"
+readonly APP_NAME="2Clipboard"
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/${APP_NAME}"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/${APP_NAME}"
+INSTALL_DIR="${HOME}/.local/bin"
+[ -d "${HOME}/.bin" ] && INSTALL_DIR="${HOME}/.bin"
+readonly HISTORY_FILE="${CACHE_DIR}/history.log"
+readonly SLOTS_DIR="${CACHE_DIR}/slots"
+readonly TEMPLATES_DIR="${CONFIG_DIR}/templates"
+
+# ------------------------------------------------------------------------------
+# Logging
+# ------------------------------------------------------------------------------
+dbg()  { [ "${TWOCLIP_DEBUG:-0}" = "1" ] && printf '[debug] %s\n' "$*" >&2 || true; }
+err()  { printf '%s: error: %s\n'   "$APP_NAME" "$*" >&2; }
+warn() { printf '%s: warning: %s\n' "$APP_NAME" "$*" >&2; }
+
+# ------------------------------------------------------------------------------
+# Self-install (desactivable con TWOCLIP_NO_INSTALL=1)
+# ------------------------------------------------------------------------------
+SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+TARGET_PATH="${INSTALL_DIR}/${APP_NAME}"
+if [ "${TWOCLIP_NO_INSTALL:-0}" != "1" ] \
+   && [ -f "$SCRIPT_PATH" ] && [ "$SCRIPT_PATH" != "$TARGET_PATH" ]; then
+    mkdir -p "$INSTALL_DIR"
+    if cp "$SCRIPT_PATH" "$TARGET_PATH" 2>/dev/null; then
+        chmod +x "$TARGET_PATH" 2>/dev/null || true
+        dbg "self-installed to $TARGET_PATH"
+    fi
+    case ":$PATH:" in
+        *":$INSTALL_DIR:"*) ;;
+        *) export PATH="$INSTALL_DIR:$PATH" ;;
+    esac
+fi
+
+mkdir -p "$CACHE_DIR" "$SLOTS_DIR" "$CONFIG_DIR" "$TEMPLATES_DIR" 2>/dev/null || true
+
+# ------------------------------------------------------------------------------
+# Defaults
+# ------------------------------------------------------------------------------
+WORD_LEN=8
+HASH_CHARS=8
+INCLUDE_NAME=true
+INCLUDE_HASH=true
+DATE_FORMAT="%Y-%m-%d"
+TIME_FORMAT=""
+DATE_PREFIX="["
+DATE_SUFFIX="]"
+NAME_PREFIX="-"
+NAME_SUFFIX=""
+HASH_PREFIX="-"
+PROFILE=""
+BODY=""
+BODY_IS_FILE=false
+APPEND_MODE=""
+NO_TITLE=false
+
+SILENT=false
+NOTIFY=true
+TO_STDOUT=false
+FORMAT="markdown"
+TAGS=""
+TITLE=""
+TEMPLATE=""
+HEADER_MODE="auto"
+SAVE_HISTORY=true
+ACTION="gen"
+ACTION_ARG=""
+SLOT_SUB=""
+RUN_CMD=()
+STDIN_DATA=""
+GIT_BRANCH=""
+GIT_COMMIT=""
+DRY_RUN=false
+CLIP_CMD=""
+
+# ------------------------------------------------------------------------------
+# Help / license
+# ------------------------------------------------------------------------------
+show_help() {
+    cat <<'EOF'
+2Clipboard — Universal clipboard utility (v2.2.0)
+
+USAGE
+  2Clipboard [ACTION] [OPTIONS]
+  cmd | 2Clipboard [OPTIONS]              # stdin se autodetecta como payload
+
+ACTIONS
+  gen                          Genera un código de proyecto (por defecto)
+  header|head                  Solo el encabezado (con Date/ID/Tags listos)
+  id                           Solo el ID (nombre-hash)
+  text "STRING"                Copia un literal
+  file PATH                    Copia un archivo con cabecera de metadatos
+  run -- CMD [ARGS...]         Ejecuta CMD, copia stdout+stderr y su exit
+  check PATH                   Copia "true" o "false" (existencia)
+  git                          Branch, commit, archivos sucios y remote
+  env VAR                      Valor de una variable de entorno
+  slot save|load|list|del      Portapapeles con nombre
+  paste                        Imprime el portapapeles a stdout
+  history [N|grep PAT|clear]   Historial de operaciones
+  version                      Imprime la versión
+
+GENERACIÓN (para `gen`)
+  -w, --word-len LEN           Longitud del nombre (1-64)         (def. 8)
+  -H, --hash-chars CHARS       Longitud del hash   (1-64)         (def. 8)
+      --no-name                Omite el nombre
+      --no-hash                Omite el hash
+      --date-format FMT        Formato strftime de la fecha       (def. %Y-%m-%d, "" = off)
+      --time-format FMT        Formato strftime de la hora       (def. off)
+      --date-prefix STR        Prefijo antes de la fecha         (def. [)
+      --date-suffix STR        Sufijo tras la fecha              (def. ])
+      --name-prefix STR        Prefijo antes del nombre          (def. -)
+      --name-suffix STR        Sufijo tras el nombre             (def. "")
+      --hash-prefix STR        Prefijo antes del hash            (def. -)
+
+CABECERA Y FORMATO
+      --title STR              Título de la cabecera
+      --tags STR               Tags separados por coma
+      --no-title               Omite la línea "# " del título
+      --header / --no-header   Fuerza / desactiva cabecera
+      --format FMT             markdown | plain | json | yaml    (def. markdown)
+      --template STR           Plantilla inline, o @ruta a un .tpl
+      --profile NAME           Atajo de --template @NAME
+      --body STR|@PATH         Cuerpo inline o desde archivo
+      --body-file PATH         Cuerpo desde archivo
+
+COMPORTAMIENTO
+      --append                 Añade al final del portapapeles actual
+      --prepend                Añade al principio del portapapeles actual
+      --stdout                 Emite el payload a stdout (mensajes a stderr)
+      --dry-run                No copia: solo imprime el resultado
+      --clip-cmd CMD           Pasa el payload por CMD (bash -c) antes de copiar
+      --silent, --quiet        Silencia toda salida
+      --no-notify              Sin notificaciones de escritorio
+      --no-history             No registra en el historial
+  -h, --help                   Muestra esta ayuda y sale
+  -v, --version                Muestra versión y sale
+      --license                Muestra la licencia (MIT) y sale
+
+VARIABLES DE ENTORNO
+  TWOCLIP_PROFILE   Perfil por defecto (equivale a --profile)
+  TWOCLIP_TAGS      Tags por defecto    (equivale a --tags)
+  TWOCLIP_TITLE     Título por defecto  (equivale a --title)
+  TWOCLIP_BACKEND   Forzar x11 | wayland (defecto: auto)
+  TWOCLIP_NO_INSTALL=1   Desactiva el auto-install (útil para tests)
+  TWOCLIP_DEBUG=1        Traza detallada a stderr
+
+VARIABLES DE PLANTILLA
+  {{TITLE}} {{DATE}} {{TIME}} {{ID}} {{NAME}} {{HASH}} {{TAGS}}
+  {{SOURCE}} {{CONTENT}} {{STATUS}} {{CMD}} {{HOST}} {{USER}}
+  {{CWD}} {{GIT_BRANCH}} {{GIT_COMMIT}} {{NOW}} {{VERSION}}
+
+EJEMPLOS
+  2Clipboard gen --word-len 6 --hash-chars 4
+  2Clipboard header --tags "inbox"
+  2Clipboard header --body @~/prompt.md --title "" --tags ""
+  2Clipboard file ~/notas.md --title "Notas" --tags "journal,personal"
+  2Clipboard run -- git diff --stat
+  2Clipboard check /etc/hosts
+  2Clipboard header --format json --tags ai --stdout 2>/dev/null | jq -r .id
+  git log --oneline -20 | 2Clipboard header --title "Recent Commits"
+
+ENDURE · Built to last
+  Web:      https://endure.digital/
+  GitHub:   https://github.com/iendure
+  Contact:  https://c.endure.digital/
+  WhatsApp: https://w.endure.digital/
+EOF
+    exit 0
+}
+
+show_license() {
+    cat <<'EOF'
+MIT License
+
+Copyright (c) 2026 ENDURE
+ENDURE · Built to last
+  Web:      https://endure.digital/
+  GitHub:   https://github.com/iendure
+  Contact:  https://c.endure.digital/
+  WhatsApp: https://w.endure.digital/
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+EOF
+    exit 0
+}
+
+# ------------------------------------------------------------------------------
+# Validación
+# ------------------------------------------------------------------------------
+validate_uint() {
+    local name="$1" val="$2" min="$3" max="$4"
+    case "$val" in
+        ''|*[!0-9]*) err "$name must be a positive integer (got '$val')"; exit 2 ;;
+    esac
+    if [ "$val" -lt "$min" ] || [ "$val" -gt "$max" ]; then
+        err "$name must be between $min and $max (got $val)"
+        exit 2
+    fi
+}
+
+# ------------------------------------------------------------------------------
+# Utility
+# ------------------------------------------------------------------------------
+json_escape() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\t'/\\t}"
+    s="${s//$'\r'/\\r}"
+    printf '%s' "$s"
+}
+
+yaml_escape() { printf '%s' "$1" | sed 's/"/\\"/g'; }
+
+tags_to_json_array() {
+    local tags="$1"
+    [ -z "$tags" ] && { printf '[]'; return; }
+    local IFS=',' first=1
+    printf '['
+    for t in $tags; do
+        t="${t#"${t%%[![:space:]]*}"}"
+        t="${t%"${t##*[![:space:]]}"}"
+        [ -z "$t" ] && continue
+        [ $first -eq 0 ] && printf ','
+        printf '"%s"' "$(json_escape "$t")"
+        first=0
+    done
+    printf ']'
+}
+
+# ------------------------------------------------------------------------------
+# Generación
+# ------------------------------------------------------------------------------
+generate_word() {
+    local target_len="$1"
+    local consonants=(b c d f g h j k l m n p r s t v w x z)
+    local vowels=(a e i o u)
+    local suffixes=(ia io ison ent arion iva)
+    local style=$((RANDOM % 3))
+    local word=""
+
+    if [ "$style" -eq 0 ]; then
+        while [ ${#word} -lt "$target_len" ]; do
+            word+="${consonants[$((RANDOM % ${#consonants[@]}))]}"
+            word+="${vowels[$((RANDOM % ${#vowels[@]}))]}"
+        done
+    elif [ "$style" -eq 1 ]; then
+        for _ in 1 2; do
+            word+="${consonants[$((RANDOM % ${#consonants[@]}))]}"
+            word+="${vowels[$((RANDOM % ${#vowels[@]}))]}"
+        done
+        local extra=(bl nd st rt tr pr nl)
+        local ext="${extra[$((RANDOM % ${#extra[@]}))]}"
+        local vow="${vowels[$((RANDOM % ${#vowels[@]}))]}"
+        word+="${ext:0:1}${vow}${ext:1:1}"
+        while [ ${#word} -lt "$target_len" ]; do
+            word+="${vowels[$((RANDOM % ${#vowels[@]}))]}"
+        done
+    else
+        for _ in 1 2; do
+            word+="${consonants[$((RANDOM % ${#consonants[@]}))]}"
+            word+="${vowels[$((RANDOM % ${#vowels[@]}))]}"
+        done
+        local chosen="${suffixes[$((RANDOM % ${#suffixes[@]}))]}"
+        word+="$chosen"
+    fi
+
+    if [ ${#word} -gt "$target_len" ]; then
+        printf '%s' "${word:0:$target_len}"
+    else
+        while [ ${#word} -lt "$target_len" ]; do
+            word+="${vowels[$((RANDOM % ${#vowels[@]}))]}"
+        done
+        printf '%s' "$word"
+    fi
+}
+
+generate_hash() {
+    local chars="$1"
+    local bytes=$(( (chars + 1) / 2 ))
+    local raw
+    raw="$(openssl rand -hex "$bytes" 2>/dev/null || head -c "$bytes" /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    printf '%s' "${raw:0:$chars}"
+}
+
+generate_id() {
+    printf '%s-%s' "$(generate_word "$WORD_LEN")" "$(generate_hash "$HASH_CHARS")"
+}
+
+# ------------------------------------------------------------------------------
+# Backend de portapapeles
+# ------------------------------------------------------------------------------
+detect_backend() {
+    local force="${TWOCLIP_BACKEND:-auto}"
+    case "$force" in
+        x11|wayland) printf '%s' "$force"; return ;;
+    esac
+    local wd="${WAYLAND_DISPLAY:-}"
+    local xrd="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    if [ -n "$wd" ] && [ -S "${xrd}/${wd}" ]; then printf 'wayland'; return; fi
+    if [ "${XDG_SESSION_TYPE:-}" = "wayland" ] && [ -S "${xrd}/wayland-0" ]; then
+        printf 'wayland'; return
+    fi
+    if [ -n "${DISPLAY:-}" ]; then printf 'x11'; return; fi
+    printf 'none'
+}
+
+copy_to_clipboard() {
+    local data="$1"
+    local backend; backend="$(detect_backend)"
+    dbg "clipboard backend: $backend"
+
+    case "$backend" in
+        wayland)
+            if command -v wl-copy >/dev/null 2>&1; then
+                printf '%s' "$data" | wl-copy && return 0
+            fi
+            ;;
+        x11)
+            if command -v xclip >/dev/null 2>&1; then
+                printf '%s' "$data" | xclip -selection clipboard -i >/dev/null 2>&1 && return 0
+            fi
+            if command -v xsel >/dev/null 2>&1; then
+                printf '%s' "$data" | xsel --clipboard --input >/dev/null 2>&1 && return 0
+            fi
+            ;;
+    esac
+    if [ -n "${DISPLAY:-}" ]; then
+        if command -v xclip >/dev/null 2>&1; then
+            printf '%s' "$data" | xclip -selection clipboard -i >/dev/null 2>&1 && return 0
+        fi
+        if command -v xsel >/dev/null 2>&1; then
+            printf '%s' "$data" | xsel --clipboard --input >/dev/null 2>&1 && return 0
+        fi
+    fi
+    printf '%s\n' "$data"
+    return 1
+}
+
+paste_from_clipboard() {
+    local backend; backend="$(detect_backend)"
+    case "$backend" in
+        wayland)
+            command -v wl-paste >/dev/null 2>&1 && { wl-paste; return $?; } ;;
+        x11)
+            command -v xclip >/dev/null 2>&1 && { xclip -selection clipboard -o; return $?; }
+            command -v xsel  >/dev/null 2>&1 && { xsel --clipboard --output; return $?; } ;;
+    esac
+    if [ -n "${DISPLAY:-}" ]; then
+        command -v xclip >/dev/null 2>&1 && { xclip -selection clipboard -o; return $?; }
+        command -v xsel  >/dev/null 2>&1 && { xsel --clipboard --output; return $?; }
+    fi
+    err "no clipboard backend available"
+    return 1
+}
+
+# ------------------------------------------------------------------------------
+# Notificación
+# ------------------------------------------------------------------------------
+notify() {
+    local body="$1"
+    [ "$NOTIFY" = true ] || return 0
+    command -v notify-send >/dev/null 2>&1 || return 0
+    notify-send -a "$APP_NAME" -i edit-copy "$APP_NAME" "$body" 2>/dev/null || true
+}
+
+# ------------------------------------------------------------------------------
+# Plantillas
+# ------------------------------------------------------------------------------
+render_template() {
+    local tpl="$1"; shift
+    local out="$tpl"
+    for kv in "$@"; do
+        local key="${kv%%=*}"
+        local val="${kv#*=}"
+        out="${out//\{\{$key\}\}/$val}"
+    done
+    printf '%s' "$out"
+}
+
+load_template() {
+    local t="$1"
+    if [[ "$t" == @* ]]; then
+        local p="${t#@}"
+        for c in "$p" "${TEMPLATES_DIR}/${p}" "${TEMPLATES_DIR}/${p}.tpl"; do
+            [ -f "$c" ] && { cat "$c"; return; }
+        done
+        printf '%s' "$t"
+        return
+    fi
+    for c in "${TEMPLATES_DIR}/${t}" "${TEMPLATES_DIR}/${t}.tpl"; do
+        [ -f "$c" ] && { cat "$c"; return; }
+    done
+    if [ -f "$t" ]; then cat "$t"; return; fi
+    printf '%s' "$t"
+}
+
+# ------------------------------------------------------------------------------
+# Cabeceras
+# ------------------------------------------------------------------------------
+build_header_markdown() {
+    [ "$NO_TITLE" = false ] && printf '# %s\n' "$TITLE"
+    [ -n "$DATE_VAL" ] && printf -- '- Date: **%s**\n' "$DATE_VAL"
+    [ -n "$TIME_VAL" ] && printf -- '- Time: **%s**\n' "$TIME_VAL"
+    [ -n "$ID_VAL" ]   && printf -- '- ID: **%s**\n'   "$ID_VAL"
+    printf -- '- Tags: %s\n' "$TAGS"
+    [ -n "$SOURCE" ]   && printf -- '- Source: `%s`\n' "$SOURCE"
+    [ -n "$STATUS" ]   && printf -- '- Exit: %s\n'     "$STATUS"
+    [ -n "$CMD_STR" ]  && printf -- '- Cmd: `%s`\n'    "$CMD_STR"
+}
+
+build_header_plain() {
+    [ "$NO_TITLE" = false ] && printf '%s\n' "$TITLE"
+    [ -n "$DATE_VAL" ] && printf 'Date: %s\n' "$DATE_VAL"
+    [ -n "$TIME_VAL" ] && printf 'Time: %s\n' "$TIME_VAL"
+    [ -n "$ID_VAL" ]   && printf 'ID: %s\n'   "$ID_VAL"
+    printf 'Tags: %s\n' "$TAGS"
+    [ -n "$SOURCE" ]   && printf 'Source: %s\n' "$SOURCE"
+    [ -n "$STATUS" ]   && printf 'Exit: %s\n'   "$STATUS"
+    [ -n "$CMD_STR" ]  && printf 'Cmd: %s\n'    "$CMD_STR"
+}
+
+# ------------------------------------------------------------------------------
+# Composición del payload
+# ------------------------------------------------------------------------------
+compose_payload() {
+    local content="$1"
+
+    [ -z "$PROFILE" ] && [ -n "${TWOCLIP_PROFILE:-}" ] && PROFILE="$TWOCLIP_PROFILE"
+    [ -z "$TAGS" ]    && [ -n "${TWOCLIP_TAGS:-}"    ] && TAGS="$TWOCLIP_TAGS"
+    [ -z "$TITLE" ]   && [ -n "${TWOCLIP_TITLE:-}"   ] && TITLE="$TWOCLIP_TITLE"
+
+    if [ -n "$PROFILE" ] && [ -z "$TEMPLATE" ]; then
+        TEMPLATE="@${PROFILE}"
+    fi
+
+    if [ "$BODY_IS_FILE" = true ] && [ -n "$BODY" ] && [ -f "$BODY" ]; then
+        content="$(cat "$BODY")"
+    fi
+
+    DATE_VAL=""
+    TIME_VAL=""
+    [ -n "$DATE_FORMAT" ] && DATE_VAL="$(date +"$DATE_FORMAT")"
+    [ -n "$TIME_FORMAT" ] && TIME_VAL="$(date +"$TIME_FORMAT")"
+
+    if [ -n "$TEMPLATE" ]; then
+        local tpl
+        tpl="$(load_template "$TEMPLATE")"
+        render_template "$tpl" \
+            "TITLE=${TITLE}" \
+            "DATE=${DATE_VAL}" \
+            "TIME=${TIME_VAL}" \
+            "ID=${ID_VAL}" \
+            "NAME=${NAME_VAL}" \
+            "HASH=${HASH_VAL}" \
+            "TAGS=${TAGS}" \
+            "SOURCE=${SOURCE}" \
+            "CONTENT=${content}" \
+            "STATUS=${STATUS}" \
+            "CMD=${CMD_STR}" \
+            "HOST=$(hostname 2>/dev/null || echo unknown)" \
+            "USER=${USER:-$(id -un 2>/dev/null || echo user)}" \
+            "CWD=$(pwd)" \
+            "GIT_BRANCH=${GIT_BRANCH}" \
+            "GIT_COMMIT=${GIT_COMMIT}" \
+            "NOW=$(date -Iseconds)" \
+            "VERSION=${VERSION}"
+        return
+    fi
+
+    if [ "$HEADER_MODE" = "off" ]; then
+        printf '%s' "$content"
+        return
+    fi
+
+    local has_header=true
+    if [ "$HEADER_MODE" = "auto" ] && [ -z "$ID_VAL" ] && [ -z "$STATUS" ]; then
+        has_header=false
+    fi
+
+    case "$FORMAT" in
+        json)
+            local content_esc; content_esc="$(json_escape "$content")"
+            printf '{"title":"%s","date":"%s","time":"%s","id":"%s",' \
+                "$(json_escape "$TITLE")" "$(json_escape "$DATE_VAL")" \
+                "$(json_escape "$TIME_VAL")" "$(json_escape "$ID_VAL")"
+            printf '"tags":%s,"source":"%s","status":"%s","cmd":"%s",' \
+                "$(tags_to_json_array "$TAGS")" "$(json_escape "$SOURCE")" \
+                "$(json_escape "$STATUS")" "$(json_escape "$CMD_STR")"
+            printf '"content":"%s"}' "$content_esc"
+            ;;
+        yaml)
+            [ -n "$TITLE" ]    && printf 'title: "%s"\n'    "$(yaml_escape "$TITLE")"
+            [ -n "$DATE_VAL" ] && printf 'date: "%s"\n'     "$(yaml_escape "$DATE_VAL")"
+            [ -n "$TIME_VAL" ] && printf 'time: "%s"\n'     "$(yaml_escape "$TIME_VAL")"
+            [ -n "$ID_VAL" ]   && printf 'id: "%s"\n'       "$(yaml_escape "$ID_VAL")"
+            [ -n "$TAGS" ]     && printf 'tags: [%s]\n'     "$TAGS"
+            [ -n "$SOURCE" ]   && printf 'source: "%s"\n'   "$(yaml_escape "$SOURCE")"
+            [ -n "$STATUS" ]   && printf 'status: "%s"\n'   "$(yaml_escape "$STATUS")"
+            [ -n "$CMD_STR" ]  && printf 'cmd: "%s"\n'      "$(yaml_escape "$CMD_STR")"
+            printf 'content: |\n'
+            printf '%s\n' "$content" | sed 's/^/  /'
+            ;;
+        plain)
+            if [ "$has_header" = true ]; then
+                build_header_plain
+                printf '\n%s' "$content"
+            else
+                printf '%s' "$content"
+            fi
+            ;;
+        markdown|*)
+            if [ "$has_header" = true ]; then
+                build_header_markdown
+                printf '\n%s' "$content"
+            else
+                printf '%s' "$content"
+            fi
+            ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Historial y slots
+# ------------------------------------------------------------------------------
+log_history() {
+    [ "$SAVE_HISTORY" = true ] || return 0
+    local label="$1" preview="$2"
+    preview="${preview//$'\n'/ }"
+    preview="${preview:0:120}"
+    printf '%s\t%s\t%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$label" "$preview" >> "$HISTORY_FILE"
+    tail -n 1000 "$HISTORY_FILE" > "${HISTORY_FILE}.tmp" 2>/dev/null \
+        && mv "${HISTORY_FILE}.tmp" "$HISTORY_FILE" || true
+}
+
+show_history() {
+    local arg="${1:-20}"
+    [ -f "$HISTORY_FILE" ] || { echo "No history yet."; return 0; }
+    case "$arg" in
+        clear) : > "$HISTORY_FILE"; echo "History cleared." ;;
+        grep*) local pat="${arg#grep }"; grep -i -- "$pat" "$HISTORY_FILE" | tail -n 50 ;;
+        ''|*[!0-9]*) tail -n 20 "$HISTORY_FILE" ;;
+        *) tail -n "$arg" "$HISTORY_FILE" ;;
+    esac
+}
+
+# ------------------------------------------------------------------------------
+# Acciones
+# ------------------------------------------------------------------------------
+action_gen() {
+    ID_VAL="$(generate_id)"
+    NAME_VAL="${ID_VAL%-*}"
+    HASH_VAL="${ID_VAL##*-}"
+
+    local code="" dt=""
+    [ -n "$DATE_FORMAT" ] && dt+="$(date +"$DATE_FORMAT")"
+    if [ -n "$TIME_FORMAT" ]; then
+        [ -n "$dt" ] && dt+=" "
+        dt+="$(date +"$TIME_FORMAT")"
+    fi
+    [ -n "$dt" ] && code+="${DATE_PREFIX}${dt}${DATE_SUFFIX}"
+
+    if [ "$INCLUDE_NAME" = true ]; then
+        if [ -n "$code" ]; then
+            code+="${NAME_PREFIX}${NAME_VAL}${NAME_SUFFIX}"
+        else
+            code+="${NAME_VAL}${NAME_SUFFIX}"
+        fi
+    fi
+    if [ "$INCLUDE_HASH" = true ]; then
+        if [ -n "$code" ]; then
+            code+="${HASH_PREFIX}${HASH_VAL}"
+        else
+            code+="${HASH_VAL}"
+        fi
+    fi
+
+    if [ -n "$TEMPLATE" ]; then
+        SOURCE=""; STATUS=""; CMD_STR=""
+        compose_payload "$code"
+    else
+        printf '%s' "$code"
+    fi
+    log_history "gen" "$code"
+    notify "Project Code: $code"
+}
+
+action_header() {
+    ID_VAL="$(generate_id)"
+    NAME_VAL="${ID_VAL%-*}"
+    HASH_VAL="${ID_VAL##*-}"
+    SOURCE=""; STATUS=""; CMD_STR=""
+    [ "$HEADER_MODE" = "auto" ] && HEADER_MODE="on"
+
+    local content="${BODY:-}"
+    if [ "$BODY_IS_FILE" = true ] && [ -n "$BODY" ]; then
+        if [ ! -f "$BODY" ]; then
+            err "body file not found: $BODY"
+            return 1
+        fi
+        content="$(cat "$BODY")"
+        BODY_IS_FILE=false
+    fi
+    compose_payload "$content"
+    log_history "header" "id=$ID_VAL tags=$TAGS title=$TITLE"
+    notify "Header: $ID_VAL"
+}
+
+action_id() {
+    local id; id="$(generate_id)"
+    printf '%s' "$id"
+    log_history "id" "$id"
+    notify "ID: $id"
+}
+
+action_text() {
+    local content="$1"
+    ID_VAL="$(generate_id)"; NAME_VAL="${ID_VAL%-*}"; HASH_VAL="${ID_VAL##*-}"
+    SOURCE=""; STATUS=""; CMD_STR=""
+    [ "$HEADER_MODE" = "auto" ] && HEADER_MODE="on"
+    compose_payload "$content"
+    log_history "text" "$content"
+    notify "Text copied (${#content} chars)"
+}
+
+action_file() {
+    local path="$1"
+    if [ ! -f "$path" ]; then err "file not found: $path"; return 1; fi
+    local content; content="$(cat "$path")"
+    ID_VAL="$(generate_id)"; NAME_VAL="${ID_VAL%-*}"; HASH_VAL="${ID_VAL##*-}"
+    SOURCE="$(readlink -f "$path" 2>/dev/null || echo "$path")"
+    STATUS=""; CMD_STR=""
+    [ "$HEADER_MODE" = "auto" ] && HEADER_MODE="on"
+    compose_payload "$content"
+    log_history "file:$path" "$content"
+    notify "File attached: $(basename "$path")"
+}
+
+action_run() {
+    if [ ${#RUN_CMD[@]} -eq 0 ]; then
+        err "run requires a command (use: 2Clipboard run -- CMD ...)"
+        return 1
+    fi
+    local output exit_code=0
+    output="$("${RUN_CMD[@]}" 2>&1)" || exit_code=$?
+
+    ID_VAL="$(generate_id)"; NAME_VAL="${ID_VAL%-*}"; HASH_VAL="${ID_VAL##*-}"
+    SOURCE=""; STATUS="$exit_code"; CMD_STR="${RUN_CMD[*]}"
+    [ "$HEADER_MODE" = "auto" ] && HEADER_MODE="on"
+    compose_payload "$output"
+    log_history "run:${RUN_CMD[*]}" "$output"
+    notify "Cmd output copied (exit $exit_code)"
+    return "$exit_code"
+}
+
+action_check() {
+    local target="$1" result="false"
+    if [ -e "$target" ] || command -v "$target" >/dev/null 2>&1; then
+        result="true"
+    fi
+    ID_VAL="$(generate_id)"; NAME_VAL="${ID_VAL%-*}"; HASH_VAL="${ID_VAL##*-}"
+    SOURCE="$target"; STATUS=""; CMD_STR=""
+    [ "$HEADER_MODE" = "auto" ] && HEADER_MODE="off"
+    compose_payload "$result"
+    log_history "check:$target" "$result"
+    notify "$target → $result"
+    return 0
+}
+
+action_git() {
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        err "not inside a git repository"
+        return 1
+    fi
+    GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+    GIT_COMMIT="$(git rev-parse --short HEAD 2>/dev/null || echo '')"
+    local dirty; dirty="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+    local content="Branch: ${GIT_BRANCH}
+Commit: ${GIT_COMMIT}
+Dirty files: ${dirty}
+Remote: $(git config --get remote.origin.url 2>/dev/null || echo '')"
+
+    ID_VAL="$(generate_id)"; NAME_VAL="${ID_VAL%-*}"; HASH_VAL="${ID_VAL##*-}"
+    SOURCE="$(pwd)"; STATUS=""; CMD_STR="git status"
+    [ -z "$TITLE" ] && TITLE="Git Snapshot"
+    [ "$HEADER_MODE" = "auto" ] && HEADER_MODE="on"
+    compose_payload "$content"
+    log_history "git" "$GIT_BRANCH@$GIT_COMMIT"
+    notify "Git: $GIT_BRANCH @ $GIT_COMMIT"
+}
+
+action_env() {
+    local var="$1" val="${!var-}"
+    if [ -z "$val" ] && [ -z "${!var+x}" ]; then
+        err "env var not set: $var"
+        return 1
+    fi
+    ID_VAL="$(generate_id)"; NAME_VAL="${ID_VAL%-*}"; HASH_VAL="${ID_VAL##*-}"
+    SOURCE="\$$var"; STATUS=""; CMD_STR=""
+    [ "$HEADER_MODE" = "auto" ] && HEADER_MODE="off"
+    compose_payload "$val"
+    log_history "env:$var" "$val"
+    notify "Env $var copied"
+}
+
+action_slot() {
+    case "$SLOT_SUB" in
+        save)
+            [ -n "$ACTION_ARG" ] || { err "slot save requires a NAME"; return 1; }
+            mkdir -p "$SLOTS_DIR"
+            if [ -n "$STDIN_DATA" ]; then
+                printf '%s' "$STDIN_DATA" > "$SLOTS_DIR/$ACTION_ARG"
+            else
+                paste_from_clipboard > "$SLOTS_DIR/$ACTION_ARG" 2>/dev/null || true
+            fi
+            log_history "slot:save" "$ACTION_ARG"
+            notify "Slot saved: $ACTION_ARG"
+            [ "$SILENT" = false ] && echo "Slot '$ACTION_ARG' saved ($(wc -c < "$SLOTS_DIR/$ACTION_ARG" 2>/dev/null || echo 0) bytes)"
+            ;;
+        load)
+            [ -n "$ACTION_ARG" ] || { err "slot load requires a NAME"; return 1; }
+            local f="$SLOTS_DIR/$ACTION_ARG"
+            [ -f "$f" ] || { err "slot not found: $ACTION_ARG"; return 1; }
+            local data; data="$(cat "$f")"
+            if [ "$DRY_RUN" = true ]; then
+                printf '%s\n' "$data"
+            else
+                copy_to_clipboard "$data"
+                notify "Slot loaded: $ACTION_ARG"
+                [ "$SILENT" = false ] && echo "Slot '$ACTION_ARG' loaded to clipboard"
+            fi
+            ;;
+        list)
+            if [ -z "$(ls -A "$SLOTS_DIR" 2>/dev/null)" ]; then
+                echo "No slots saved."
+            else
+                ls -1 "$SLOTS_DIR"
+            fi
+            ;;
+        del|rm)
+            [ -n "$ACTION_ARG" ] || { err "slot del requires a NAME"; return 1; }
+            rm -f "$SLOTS_DIR/$ACTION_ARG"
+            notify "Slot deleted: $ACTION_ARG"
+            ;;
+        *)
+            err "unknown slot subcommand '$SLOT_SUB' (use save|load|list|del)"
+            return 1
+            ;;
+    esac
+}
+
+action_paste()     { paste_from_clipboard; }
+action_history()   { show_history "${ACTION_ARG:-20}"; }
+action_version() {
+    printf '%s %s\n' "$APP_NAME" "$VERSION"
+    printf 'ENDURE · Built to last\n'
+    printf '  Web:      https://endure.digital/\n'
+    printf '  GitHub:   https://github.com/iendure\n'
+    printf '  Contact:  https://c.endure.digital/\n'
+    printf '  WhatsApp: https://w.endure.digital/\n'
+}
+
+# ------------------------------------------------------------------------------
+# Parseo
+# ------------------------------------------------------------------------------
+parse_args() {
+    if [ $# -gt 0 ]; then
+        case "$1" in
+            gen|text|file|run|check|git|env|slot|paste|history|header|head|id|version)
+                ACTION="$1"; shift ;;
+        esac
+    fi
+    if [ "$ACTION" = "slot" ] && [ $# -gt 0 ]; then
+        SLOT_SUB="$1"; shift
+    fi
+
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -h|--help)     show_help ;;
+            -v|--version)  echo "$APP_NAME $VERSION"; exit 0 ;;
+            --license)     show_license ;;
+            -w|--word-len)     WORD_LEN="${2:-}";    shift 2 ;;
+            -H|--hash-chars)   HASH_CHARS="${2:-}";  shift 2 ;;
+            --no-name)   INCLUDE_NAME=false; shift ;;
+            --no-hash)   INCLUDE_HASH=false; shift ;;
+            --date-format)  DATE_FORMAT="${2:-}";  shift 2 ;;
+            --time-format)  TIME_FORMAT="${2:-}";  shift 2 ;;
+            --date-prefix)  DATE_PREFIX="${2:-}";  shift 2 ;;
+            --date-suffix)  DATE_SUFFIX="${2:-}";  shift 2 ;;
+            --name-prefix)  NAME_PREFIX="${2:-}";  shift 2 ;;
+            --name-suffix)  NAME_SUFFIX="${2:-}";  shift 2 ;;
+            --hash-prefix)  HASH_PREFIX="${2:-}";  shift 2 ;;
+            --title)     TITLE="${2:-}";     shift 2 ;;
+            --tags)      TAGS="${2:-}";      shift 2 ;;
+            --template)  TEMPLATE="${2:-}";  shift 2 ;;
+            --format)    FORMAT="${2:-markdown}"; shift 2 ;;
+            --header)    HEADER_MODE="on";   shift ;;
+            --no-header) HEADER_MODE="off";  shift ;;
+            --silent|--quiet) SILENT=true; shift ;;
+            --stdout)    TO_STDOUT=true;     shift ;;
+            --dry-run)   DRY_RUN=true;       shift ;;
+            --clip-cmd)  CLIP_CMD="${2:-}";  shift 2 ;;
+            --no-notify) NOTIFY=false;       shift ;;
+            --no-history) SAVE_HISTORY=false; shift ;;
+            --profile)   PROFILE="${2:-}";   shift 2 ;;
+            --body)
+                BODY="${2:-}"
+                case "$BODY" in
+                    @*) BODY="${BODY#@}"; BODY_IS_FILE=true ;;
+                esac
+                shift 2 ;;
+            --body-file)  BODY="${2:-}"; BODY_IS_FILE=true; shift 2 ;;
+            --append)     APPEND_MODE="append";  shift ;;
+            --prepend)    APPEND_MODE="prepend"; shift ;;
+            --id-only)    ACTION="id";           shift ;;
+            --no-title)   NO_TITLE=true;         shift ;;
+            --)
+                shift
+                if [ "$ACTION" = "run" ]; then
+                    RUN_CMD=("$@")
+                else
+                    ACTION_ARG="$*"
+                fi
+                break ;;
+            -*)
+                err "unknown option '$1'"
+                echo "Run '2Clipboard --help' for usage." >&2
+                exit 1 ;;
+            *)
+                if [ -z "$ACTION_ARG" ]; then
+                    ACTION_ARG="$1"
+                elif [ "$ACTION" = "run" ]; then
+                    RUN_CMD+=("$1")
+                elif [ "$ACTION" = "history" ] || [ "$ACTION" = "slot" ]; then
+                    ACTION_ARG="$ACTION_ARG $1"
+                else
+                    err "unexpected argument '$1'"
+                    exit 1
+                fi
+                shift ;;
+        esac
+    done
+}
+
+# ------------------------------------------------------------------------------
+# Main
+# ------------------------------------------------------------------------------
+parse_args "$@"
+
+# Validación de numéricos
+validate_uint "--word-len"   "$WORD_LEN"   1 64
+validate_uint "--hash-chars" "$HASH_CHARS" 1 64
+
+# Rechazar posicionales cuando la acción por defecto (gen) no los usa
+if [ "$ACTION" = "gen" ] && [ -n "$ACTION_ARG" ]; then
+    err "unknown action '$ACTION_ARG'"
+    echo "Run '2Clipboard --help' for usage." >&2
+    exit 1
+fi
+
+# Leer stdin solo cuando corresponde
+case "$ACTION" in
+    gen|header|head|id|file|git|env|slot|paste|history|check|version) ;;
+    *)
+        if [ ! -t 0 ]; then
+            STDIN_DATA="$(cat)"
+        fi
+        ;;
+esac
+
+if [ -n "$STDIN_DATA" ] && [ "$ACTION" = "gen" ] && [ -z "$ACTION_ARG" ]; then
+    ACTION="text"
+    ACTION_ARG="$STDIN_DATA"
+fi
+
+PAYLOAD=""
+rc=0
+
+case "$ACTION" in
+    gen)         PAYLOAD="$(action_gen)" ;;
+    header|head) PAYLOAD="$(action_header)" ;;
+    id)          PAYLOAD="$(action_id)" ;;
+    version)     action_version; exit 0 ;;
+    text)
+        if [ -z "$ACTION_ARG" ] && [ -n "$STDIN_DATA" ]; then
+            ACTION_ARG="$STDIN_DATA"
+        fi
+        if [ -z "$ACTION_ARG" ]; then
+            err "'text' requires a string or stdin"
+            exit 1
+        fi
+        PAYLOAD="$(action_text "$ACTION_ARG")"
+        ;;
+    file)
+        [ -n "$ACTION_ARG" ] || { err "'file' requires a PATH"; exit 1; }
+        PAYLOAD="$(action_file "$ACTION_ARG")"
+        ;;
+    run)
+        set +e
+        PAYLOAD="$(action_run)"
+        rc=$?
+        set -e
+        ;;
+    check)
+        [ -n "$ACTION_ARG" ] || { err "'check' requires a PATH"; exit 1; }
+        PAYLOAD="$(action_check "$ACTION_ARG")"
+        ;;
+    git)       PAYLOAD="$(action_git)" ;;
+    env)
+        [ -n "$ACTION_ARG" ] || { err "'env' requires a VAR name"; exit 1; }
+        PAYLOAD="$(action_env "$ACTION_ARG")"
+        ;;
+    slot)      action_slot; exit $? ;;
+    paste)     action_paste; exit $? ;;
+    history)   action_history; exit $? ;;
+    *)         err "unknown action '$ACTION'"; exit 1 ;;
+esac
+
+# Append / prepend al portapapeles actual
+if [ -n "$APPEND_MODE" ] && [ -n "$PAYLOAD" ]; then
+    cur="$(paste_from_clipboard 2>/dev/null || true)"
+    case "$APPEND_MODE" in
+        append)  PAYLOAD="${cur}${PAYLOAD}" ;;
+        prepend) PAYLOAD="${PAYLOAD}${cur}" ;;
+    esac
+fi
+
+# Filtro externo (payload por stdin, sin eval)
+if [ -n "$CLIP_CMD" ] && [ -n "$PAYLOAD" ]; then
+    PAYLOAD="$(printf '%s' "$PAYLOAD" | bash -c "$CLIP_CMD")"
+fi
+
+# Salida y copia (sin doble print)
+if [ "$DRY_RUN" = true ] || [ "$TO_STDOUT" = true ]; then
+    printf '%s\n' "$PAYLOAD"
+fi
+if [ "$DRY_RUN" = false ] && [ -n "$PAYLOAD" ]; then
+    copy_to_clipboard "$PAYLOAD" || true
+fi
+
+if [ "$SILENT" = false ]; then
+    case "$ACTION" in
+        gen) : ;;
+        run) echo "2Clipboard: cmd output copied (exit ${rc:-0})" >&2 ;;
+        *)   echo "2Clipboard: copied to clipboard" >&2 ;;
+    esac
+fi
+
+[ "$ACTION" = "run" ] && exit "${rc:-0}"
+exit 0

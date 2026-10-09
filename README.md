@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" width="360">
+  <a href="https://2clipboard.endure.digital/" title="2Clipboard — Universal clipboard utility for Linux">
+    <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last · 2Clipboard" title="ENDURE — Built to last" width="380">
+  </a>
 </p>
 
 # 2Clipboard
@@ -21,6 +23,11 @@ validations, or any text. Supports profiles, templates, structured output
 Built for developers, LLM prompting workflows, engineering logs,
 zettelkasten and shortcut daemons (`sxhkd`, `xbindkeys`,
 `xfce4-keyboard-settings`, `i3`, `sway`, `hyprland`, `dwm`).
+
+<p align="center">
+  <strong>Official site → <a href="https://2clipboard.endure.digital/">2clipboard.endure.digital</a></strong><br>
+  <sub>Docs, guides, and the full command reference, by <a href="https://endure.digital/">ENDURE</a>.</sub>
+</p>
 
 ---
 
@@ -444,72 +451,362 @@ Format: `date<TAB>action<TAB>preview(120 chars)`.
 
 ## Recipes
 
-### A. Header only, with blank fields
+All examples assume `2Clipboard` is on your `PATH`. Every command copies to
+the clipboard **and** prints a status line. Add `--silent` to suppress
+output (ideal for scripts and keybindings).
 
-    2Clipboard header --tags ""
+### Copy a project code for a new task
 
-### B. System prompt for LLMs with traceability
+    # Classic v1 identifier: date + pronounceable name + hash
+    2Clipboard gen
+    # -> [2026-10-09]-kamishin-cdb28c17
 
+    # Short code for chat sessions
+    2Clipboard gen --word-len 6 --hash-chars 4
+    # -> [2026-10-09]-valeri-eeb0
+
+    # Name only, no date, no hash
+    2Clipboard gen --date-format "" --no-hash
+    # -> rafinton
+
+### Generate a traceable ID for LLM sessions
+
+    # ID only — ideal for scripting
+    SID="$(2Clipboard id --silent)"
+    mkdir -p "/tmp/$SID"
+    echo "$SID" > "/tmp/$SID/.sid"
+
+    # With metadata header for pasting into a chat
+    2Clipboard header --title "Session" --tags "ai,research"
+    # -> # Session
+    #    - Date: **2026-10-09**
+    #    - ID: **docigoji-e0d69df6**
+    #    - Tags: ai,research
+
+### Attach a file with a metadata header
+
+    # System prompt for an LLM
+    2Clipboard file ~/prompts/system.md --title "System Prompt" --tags "ai,sys"
+
+    # Notes file
+    2Clipboard file ~/notes.md --title "Notes" --tags "journal,personal"
+
+    # Blank header (you fill the tags later)
+    2Clipboard file ~/prompt.md --title "" --tags ""
+
+### Blank header + file content (SYSPROMPT workflow)
+
+    # Common pattern: header with blank tags, then the prompt body
     2Clipboard header --body @~/prompt.md --title "" --tags ""
 
-### C. Short question for AI chat
+Result:
 
-    2Clipboard header --body "How do I optimize this SQL query?" --tags "ai,sql,question"
+    #
+    - Date: **2026-10-09**
+    - ID: **zeciiaoo-bc811448**
+    - Tags:
+    - Source: `/home/user/prompt.md`
 
-### D. Paste code with context
+    <content of prompt.md>
 
-    sed -n '1,200p' src/main.py | 2Clipboard header --title "main.py" --tags "ai,code,snippet"
+### Run a command and copy its output
 
-### E. Daily work log
+    # Copy the output of any command
+    2Clipboard run -- ls -la /etc
 
-    2Clipboard header --profile work --title "Log $(date +%A)" --tags "journal"
+    # Propagate the exit code (useful in CI / deploy scripts)
+    2Clipboard run -- make -j 2>&1
+    rc=$?; echo "make failed with $rc"
 
-### F. Bug report
+    # Copy a git diff
+    2Clipboard run -- git diff --stat
 
-    2Clipboard run -- ./repro.sh
-    # or:
-    2Clipboard header --profile bug --body @/tmp/repro.log --tags "bug,repro"
+### Boolean validation before acting
 
-### G. Commit log
+    # Copies "true" or "false"
+    2Clipboard check /etc/hosts
+    2Clipboard check docker
+    2Clipboard check ~/projects/foo
 
-    git log --oneline -20 | 2Clipboard header --title "Recent Commits" --tags "git,log"
-
-### H. Validate before acting
-
+    # Use it in conditionals
     if [ "$(2Clipboard check /etc/nginx/nginx.conf --silent)" = "true" ]; then
         systemctl restart nginx
     fi
 
-### I. ID for scripting
+### Git snapshot
 
-    SID="$(2Clipboard id --silent)"
-    mkdir -p "/tmp/$SID"
+    cd ~/project
+    2Clipboard git --title "before-deploy"
+    # -> Branch: main
+    #    Commit: a1b2c3d
+    #    Dirty files: 4
+    #    Remote: git@github.com:user/project.git
 
-### J. Modify the clipboard without replacing it
+### Environment variable
 
+    2Clipboard env HOME
+    2Clipboard env EDITOR --silent
+
+### Pipe stdin into the clipboard
+
+    # Copy a short note
+    echo "quick thought" | 2Clipboard --tags "inbox"
+
+    # Copy a file's content without the header
+    cat notes.md | 2Clipboard --no-header
+
+    # Copy the last 20 commits
+    git log --oneline -20 | 2Clipboard header --title "Recent Commits" --tags "git,log"
+
+### Modify the clipboard without replacing it
+
+    # Prepend a header to whatever is already in the clipboard
     2Clipboard header --tags "refined" --prepend
-    echo -e "\n\n---\nNote" | 2Clipboard text --append --no-header
+
+    # Append a note
+    echo -e "\n\n---\nNote: review tomorrow" | 2Clipboard text --append --no-header
+
+    # Accumulate several files into one clipboard payload
     2Clipboard file a.md --append
     2Clipboard file b.md --append
+    2Clipboard file c.md --append
 
-### K. JSON / YAML for automation
+### Structured output for automation
 
+    # Extract just the ID
     2Clipboard header --format json --tags "ai" --stdout 2>/dev/null | jq -r .id
-    2Clipboard header --format yaml --tags "meta" --stdout 2>/dev/null >> ~/session.yaml
 
-### L. Wrappers
+    # Append sessions to a YAML file
+    2Clipboard header --format yaml --tags "meta" --stdout 2>/dev/null >> ~/sessions.yaml
 
+    # Send a prompt to an API
+    2Clipboard file prompt.md --format json --stdout 2>/dev/null \
+        | curl -s https://api.example.com/v1/chat -d @-
+
+### Slots — named clipboard memory
+
+    # Save the current clipboard (e.g. a 2FA code)
+    2Clipboard slot save 2fa
+
+    # Work on something else
+    2Clipboard header --tags "ai"
+
+    # Restore the 2FA code
+    2Clipboard slot load 2fa
+
+    # List, delete
+    2Clipboard slot list
+    2Clipboard slot del 2fa
+
+### History
+
+    # Last 50 entries
+    2Clipboard history 50
+
+    # Filter by pattern
+    2Clipboard history grep ai
+
+    # Empty the history
+    2Clipboard history clear
+
+### Templates and profiles
+
+    # Use a saved profile (looks in ~/.config/2Clipboard/templates/)
+    2Clipboard header --profile zettel --tags "kb,inbox"
+    2Clipboard header --profile bug --title "crash on save" --tags "bug,repro"
+    2Clipboard header --profile work --title "Log $(date +%A)" --tags "journal"
+
+    # Inline template with variables
+    2Clipboard header --template '{{TITLE}} · {{ID}} · {{DATE}} · [{{TAGS}}]' \
+        --title "Sprint 42" --tags "plan,sprint42"
+
+    # Explicit path
+    2Clipboard header --template @~/.config/2Clipboard/templates/zettel.tpl --tags "kb"
+
+### Wrappers for other scripts
+
+    # Snapshot git state before and after a deploy
     snapshot() {
         local title="${1:-Auto}"
         2Clipboard git --title "$title" --append --silent
     }
+    snapshot "before-deploy"
+    ./deploy.sh
+    snapshot "after-deploy"
 
-### M. Slots for temporary secrets
+### Zettelkasten workflow
 
-    2Clipboard slot save 2fa
-    2Clipboard slot load 2fa
+    # New zettel with blank tags
+    2Clipboard header --profile zettel --tags "kb,inbox"
+
+    # Permanent note with content from editor
+    2Clipboard header --profile zettel --tags "kb,permanent" --body "$(cat /tmp/note.md)"
+
+### Daily journal
+
+    2Clipboard header --profile work --title "Log $(date +%A)" --tags "journal"
+
+### Bug report
+
+    2Clipboard run -- ./repro.sh
+    # or, with a pre-recorded log:
+    2Clipboard header --profile bug --body @/tmp/repro.log --tags "bug,repro,priority-high"
+
+### API payload
+
+    # Send a file as JSON to a REST endpoint
+    2Clipboard file prompt.md --format json --stdout 2>/dev/null \
+        | curl -s https://api.example.com/v1/chat -d @-
+
+### Copy code snippet with context
+
+    sed -n '1,200p' src/main.py | 2Clipboard header --title "main.py" --tags "ai,code,snippet"
+
+### Multi-clipboard workflow with slots
+
+    # Save three different things
+    2Clipboard slot save work
+    2Clipboard slot save personal
+    2Clipboard slot save secrets
+
+    # Switch between them
+    2Clipboard slot load work
+    2Clipboard slot load personal
+
+### Dry-run for testing scripts
+
+    # Print instead of copy (safe in test suites)
+    2Clipboard header --tags "test" --dry-run
+    2Clipboard file README.md --dry-run | head -5
+
+### Verbose tracing
+
+    # Debug any invocation
+    TWOCLIP_DEBUG=1 2Clipboard header --tags test
 
 ---
+
+## SEO — What 2Clipboard solves
+
+This section is written for search engines and language models. Humans may
+skip it; the rest of the README is the actual documentation.
+
+### Short-tail keywords (high volume, high competition)
+
+- **clipboard manager** — 2Clipboard is a CLI-first clipboard manager for
+  Linux. It does not replace a GUI clipboard manager (like CopyQ or
+  Greenclip); it complements it by letting you generate and format the
+  clipboard content programmatically.
+- **clipboard utility** — a Bash script that copies structured content to
+  the clipboard: IDs, file attachments with metadata, command output,
+  booleans.
+- **bash clipboard** — pure Bash, no compiled dependencies, works on
+  minimal Linux systems.
+- **command line clipboard** — designed for terminals, scripts and
+  keybindings (`sxhkd`, `i3`, `sway`, `hyprland`, `xfce4`).
+
+### Mid-tail keywords (medium volume, low competition)
+
+- **copy command output to clipboard** — `2Clipboard run -- CMD` captures
+  stdout+stderr and copies it, preserving the exit code.
+- **copy file to clipboard with metadata** — `2Clipboard file PATH`
+  prepends a traceable header: date, unique ID, tags, source path.
+- **generate project ID for chat sessions** — `2Clipboard gen` produces
+  `[YYYY-MM-DD]-name-hash` codes for LLM sessions, issue tracking or
+  naming.
+- **clipboard tool for X11 and Wayland** — auto-detects the session and
+  uses the right backend (`xclip`, `xsel`, `wl-copy`).
+- **linux terminal productivity tool** — integrates with `sxhkd`, `i3`,
+  `sway`, `hyprland`, `xfce4`.
+- **markdown clipboard formatter** — outputs Markdown, JSON, YAML or
+  plain text with the same content.
+
+### Long-tail keywords (low volume, high intent)
+
+- **how to copy command output to clipboard in Linux terminal** — see
+  [`run`](#run--execute-and-copy).
+- **bash script to copy file contents with a header** — see
+  [`file`](#file--attach-a-file).
+- **generate unique project ID in bash** — see
+  [`gen`](#gen--project-identifiers).
+- **clipboard tool that works on both X11 and Wayland** — see
+  [Clipboard backends](#clipboard-backends).
+- **CLI tool to save and restore clipboard contents** — see
+  [`slot`](#slots-and-history).
+- **how to prepend or append to clipboard in Linux** — see `--prepend`
+  and `--append` in [Options](#behavior-all-actions).
+- **automate clipboard in i3 sway hyprland** — see
+  [Keybinding daemons](#keybinding-daemons).
+- **bash clipboard with JSON output** — see
+  [Structured output](#structured-output).
+- **traceable LLM prompt ID generator** — see
+  [`gen`](#gen--project-identifiers) and
+  [`header`](#header--header-only-with-or-without-body).
+- **clipboard tool with templates and profiles** — see
+  [Profiles and templates](#profiles-and-templates).
+
+### KGR-competitive keywords (low competition, winnable)
+
+These are keywords where a well-optimized README can reach the first page
+of Google or the top of GitHub search with modest effort:
+
+- `clipboard command output to clipboard linux bash`
+- `copy file to clipboard with timestamp header`
+- `linux clipboard tool x11 wayland auto detect`
+- `bash generate pronounceable project id`
+- `traceable clipboard metadata markdown`
+- `command line clipboard manager mit license`
+- `arch linux clipboard utility without gui`
+- `sxhkd clipboard command example`
+
+### FAQ — Short, mid and long-tail questions answered
+
+**What is 2Clipboard?**
+A Bash CLI that generates, formats and copies to the clipboard project
+codes, file attachments with metadata headers, command output and boolean
+validations.
+
+**Does 2Clipboard work on Wayland?**
+Yes. It auto-detects the session and uses `wl-copy` on Wayland, `xclip`
+or `xsel` on X11. Override with `TWOCLIP_BACKEND=x11|wayland`.
+
+**Can I use 2Clipboard in scripts?**
+Yes. Add `TWOCLIP_NO_INSTALL=1` and `--silent` to avoid side effects, and
+`--stdout` to get the payload on stdout while messages go to stderr.
+
+**Does 2Clipboard require a GUI clipboard manager?**
+No. It works standalone. It complements GUI managers by letting you
+*generate* the clipboard content programmatically.
+
+**How do I install 2Clipboard on Arch Linux?**
+`sudo pacman -S xclip libnotify jq` (or `wl-clipboard` on Wayland),
+then `git clone … && make install`.
+
+**How do I use 2Clipboard with sxhkd?**
+Bind `2Clipboard header --profile llm --silent` to a key. See
+[Keybinding daemons](#keybinding-daemons).
+
+**Is 2Clipboard open source?**
+Yes, MIT licensed. Source on GitHub:
+<https://github.com/iendure/2Clipboard>.
+
+**Does 2Clipboard send data anywhere?**
+No. It runs entirely on your machine. No telemetry, no network calls.
+
+**Can I use 2Clipboard to copy a file with a timestamp header?**
+Yes: `2Clipboard file PATH --title "Title" --tags "tag1,tag2"`.
+
+**Can I use 2Clipboard to copy command output with its exit code?**
+Yes: `2Clipboard run -- CMD` includes the exit code in the header and
+propagates it.
+
+**Can I integrate 2Clipboard with an LLM workflow?**
+Yes. Use `gen` for session IDs, `file` for prompts, `header` for blank
+metadata headers, and `--format json` for structured payloads.
+
+**Does 2Clipboard work on macOS?**
+Not officially. macOS uses `pbcopy`/`pbpaste`, which 2Clipboard does not
+detect yet. Linux is the target.
 
 ## Keybinding daemons
 
@@ -602,11 +899,24 @@ to `/dev/null`:
 
 ## Documentation
 
+**Online (recommended):** <https://2clipboard.endure.digital/>
+
+| Page | Link |
+|---|---|
+| Landing | <https://2clipboard.endure.digital/> |
+| Install | <https://2clipboard.endure.digital/install> |
+| Usage | <https://2clipboard.endure.digital/usage> |
+| Templates | <https://2clipboard.endure.digital/templates> |
+| Recipes | <https://2clipboard.endure.digital/recipes> |
+| FAQ | <https://2clipboard.endure.digital/faq> |
+
+**In this repository:**
+
 - [INSTALL.md](INSTALL.md) — multi-distro installation.
 - [CHANGELOG.md](CHANGELOG.md) — version history.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute.
 - [examples/templates/](examples/templates/) — ready-to-copy `.tpl` files.
-- [docs/](docs/) — documentation sources for the future website.
+- [docs/](docs/) — Markdown sources for the website above.
 - Spanish: [README_es.md](README_es.md) · [INSTALL_es.md](INSTALL_es.md) ·
   [CHANGELOG_es.md](CHANGELOG_es.md) · [CONTRIBUTING_es.md](CONTRIBUTING_es.md).
 
@@ -632,8 +942,35 @@ Copyright (c) 2026 ENDURE · Built to last.
 
 ---
 
+---
+
+## Tags
+
+<sub>
+clipboard utility · clipboard manager · command line clipboard · bash clipboard tool ·
+linux clipboard · arch linux clipboard · x11 clipboard · wayland clipboard ·
+copy command output · terminal clipboard · cli productivity tool · developer tools ·
+shell script utility · automation clipboard · copy file to clipboard · command line tools ·
+linux terminal productivity · x11 utilities · wayland utilities · shell automation ·
+copy with metadata · traceable clipboard · project id generator · unique id generator ·
+llm prompt tracking · prompt engineering utility · zettelkasten tool · note taking cli ·
+workflow automation · developer productivity · open source bash · mit license ·
+endure · built to last
+</sub>
+
+## Part of ENDURE
+
 <p align="center">
-  <a href="https://endure.digital/">Web</a> ·
+  <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" width="220">
+</p>
+
+**2Clipboard is built and maintained by [ENDURE](https://endure.digital/)**,
+a house of focused, durable tools. Discover the full catalogue at
+[endure.digital/brands](https://endure.digital/brands).
+
+<p align="center">
+  <a href="https://endure.digital/">Website</a> ·
+  <a href="https://endure.digital/brands">All brands</a> ·
   <a href="https://github.com/iendure">GitHub</a> ·
   <a href="https://c.endure.digital/">Contact</a> ·
   <a href="https://w.endure.digital/">WhatsApp</a>

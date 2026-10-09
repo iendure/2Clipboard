@@ -621,6 +621,26 @@ o con diagnostico:
 
 ---
 
+## Parte de ENDURE
+
+<p align="center">
+  <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" width="220">
+</p>
+
+**2Clipboard es construido y mantenido por [ENDURE](https://endure.digital/)**,
+una casa de herramientas enfocadas y duraderas. Descubre el catálogo
+completo en [endure.digital/brands](https://endure.digital/brands).
+
+<p align="center">
+  <a href="https://endure.digital/">Sitio</a> ·
+  <a href="https://endure.digital/brands">Todas las marcas</a> ·
+  <a href="https://github.com/iendure">GitHub</a> ·
+  <a href="https://c.endure.digital/">Contacto</a> ·
+  <a href="https://w.endure.digital/">WhatsApp</a>
+</p>
+
+---
+
 ## Licencia
 
 MIT. Ver [LICENSE](LICENSE).

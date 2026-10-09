@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" width="280">
+  <a href="https://endure.digital/" title="ENDURE — Built to last">
+    <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" title="ENDURE — Built to last" width="300">
+  </a>
 </p>
 
 # Installing 2Clipboard
@@ -315,6 +317,18 @@ fallback path, temporarily rename `openssl`.
     TWOCLIP_DEBUG=1 2Clipboard header --tags test
 
 ---
+
+---
+
+## Tags
+
+<sub>
+clipboard utility · clipboard manager · command line clipboard · bash clipboard tool ·
+linux clipboard · arch linux clipboard · x11 clipboard · wayland clipboard ·
+copy command output · terminal clipboard · cli productivity tool · developer tools ·
+shell script utility · automation clipboard · copy file to clipboard ·
+open source bash · mit license · endure · built to last
+</sub>
 
 ## ENDURE
 

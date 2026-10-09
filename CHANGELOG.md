@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" width="280">
+  <a href="https://endure.digital/" title="ENDURE — Built to last">
+    <img src="assets/ENDURE__logo__dark_Built_to_last.svg" alt="ENDURE — Built to last" title="ENDURE — Built to last" width="300">
+  </a>
 </p>
 
 # Changelog
